@@ -1,0 +1,52 @@
+[
+  {
+    "file": "LGPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/qt/qtbase/v6.11.0/LICENSES/LGPL-3.0-only.txt",
+    "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+  },
+  {
+    "file": "GPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/qt/qtbase/v6.11.0/LICENSES/GPL-3.0-only.txt",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  },
+  {
+    "file": "LGPL-2.1.txt",
+    "url": "https://raw.githubusercontent.com/libusb/libusb/v1.0.26/COPYING",
+    "sha256": "5df07007198989c622f5d41de8d703e7bef3d0e79d62e24332ee739a452af62a"
+  },
+  {
+    "file": "cpp-httplib.txt",
+    "url": "https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.19.0/LICENSE",
+    "sha256": "4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b"
+  },
+  {
+    "file": "libssh2.txt",
+    "url": "https://raw.githubusercontent.com/libssh2/libssh2/libssh2-1.11.0/COPYING",
+    "sha256": "fda5e2522c58ba1f31c9f2044747616457466f4aebec16ade4af86e3a16a8e02"
+  },
+  {
+    "file": "Python-3.11.9.txt",
+    "origin": "Installed dependency license",
+    "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+  },
+  {
+    "file": "PyInstaller-6.19.0.txt",
+    "origin": "Installed dependency license",
+    "sha256": "dcf75fdb959db1e3b41c0f8505069d2ece781b5ec6b3d0a4d30975cfc6580245"
+  },
+  {
+    "file": "OpenSSL-3.6.1.txt",
+    "origin": "Installed dependency license",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  {
+    "file": "XZ-5.8.2.txt",
+    "origin": "Installed dependency license",
+    "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+  },
+  {
+    "file": "0BSD.txt",
+    "origin": "Installed dependency license",
+    "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1"
+  }
+]

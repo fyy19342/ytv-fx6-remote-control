@@ -1,0 +1,27 @@
+name: 不具合報告
+description: 動作環境と実際の挙動を記録します。
+body:
+  - type: markdown
+    attributes:
+      value: 'パスワードやカメラの認証情報を記入しないでください。実機操作の結果とアプリ起動の結果を区別してください。'
+  - type: input
+    id: build
+    attributes:
+      label: Build ID / macOS / Mac の種類
+      placeholder: 20261001b / macOS 26 / Apple Silicon
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順と期待した動作・実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: FX6 の設定・ファームウェア・レンズ・接続方法
+  - type: textarea
+    id: logs
+    attributes:
+      label: 関連ログ（認証情報や個人情報を除去してから貼り付け）

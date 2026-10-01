@@ -1,0 +1,723 @@
+#include "sdk_service.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <filesystem>
+#include <future>
+#include <iomanip>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <thread>
+
+#if defined(__APPLE__) || defined(__linux__)
+#include <unistd.h>
+#endif
+
+#include "sony_diagnostics.h"
+#include "exposure_steps.h"
+
+namespace {
+
+std::string sdk_error_to_string(SCRSDK::CrError err) {
+    if (err == SCRSDK::CrError_None) return "CrError_None";
+    return sdk_error_name(err) + " (0x" + [] (SCRSDK::CrError value) {
+        std::ostringstream oss;
+        oss << std::hex << value;
+        return oss.str();
+    }(err) + ")";
+}
+
+std::string comma_separated(uint64_t value) {
+    std::string src = std::to_string(value);
+    std::string out;
+    int count = 0;
+    for (auto it = src.rbegin(); it != src.rend(); ++it) {
+        if (count == 3) {
+            out.push_back(',');
+            count = 0;
+        }
+        out.push_back(*it);
+        ++count;
+    }
+    std::reverse(out.begin(), out.end());
+    return out;
+}
+
+std::string format_decimal(double value, int decimals = 1) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(decimals) << value;
+    std::string s = oss.str();
+    while (!s.empty() && s.back() == '0') s.pop_back();
+    if (!s.empty() && s.back() == '.') s.pop_back();
+    return s;
+}
+
+std::string current_working_directory() {
+#if defined(__APPLE__)
+    constexpr size_t kMaxPath = 1024;
+    char buffer[kMaxPath] = {0};
+    if (getcwd(buffer, sizeof(buffer) - 1) != nullptr) {
+        return std::string(buffer);
+    }
+#endif
+    return std::filesystem::current_path().string();
+}
+
+template <typename T>
+std::vector<uint64_t> extract_array_values(const uint8_t* values, uint32_t size) {
+    const auto count = size / sizeof(T);
+    const auto* typed = reinterpret_cast<const T*>(values);
+    std::vector<uint64_t> out;
+    out.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        out.push_back(static_cast<uint64_t>(typed[i]));
+    }
+    return out;
+}
+
+} // namespace
+
+Fx6SdkService::Fx6SdkService(Logger& logger)
+    : logger_(logger), callback_(*this) {
+    sdk_initialized_ = SCRSDK::Init();
+    if (!sdk_initialized_) {
+        set_last_error("SCRSDK::Init failed");
+        logger_.error(last_error_);
+    } else {
+        logger_.info("SCRSDK initialized");
+    }
+}
+
+Fx6SdkService::~Fx6SdkService() {
+    std::string ignored;
+    disconnect_camera(ignored);
+    release_sdk();
+}
+
+bool Fx6SdkService::ensure_initialized() {
+    if (sdk_initialized_) return true;
+    set_last_error("SDK is not initialized");
+    return false;
+}
+
+void Fx6SdkService::release_sdk() {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (sdk_initialized_) {
+        SCRSDK::Release();
+        sdk_initialized_ = false;
+        logger_.info("SCRSDK released");
+    }
+}
+
+void Fx6SdkService::set_last_error(const std::string& message) {
+    std::lock_guard<std::mutex> lock(error_mutex_);
+    last_error_ = message;
+}
+
+std::string Fx6SdkService::build_camera_id(const SCRSDK::ICrCameraObjectInfo* info) const {
+    if (!info) return {};
+    auto mac = info->GetMACAddressChar();
+    if (mac && *mac) return std::string(mac);
+    auto guid = info->GetGuid();
+    if (guid && *guid) return std::string(guid);
+    auto ip = info->GetIPAddressChar();
+    if (ip && *ip) return std::string(ip);
+    return std::string(info->GetModel()) + "-unknown";
+}
+
+std::vector<CameraSummary> Fx6SdkService::enumerate_cameras() {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    std::vector<CameraSummary> result;
+    if (!ensure_initialized()) return result;
+
+    constexpr int kAttempts = 2;
+    for (int attempt = 1; attempt <= kAttempts; ++attempt) {
+        SCRSDK::ICrEnumCameraObjectInfo* camera_list = nullptr;
+        const auto err = SCRSDK::EnumCameraObjects(&camera_list, 3);
+        if (err == SCRSDK::CrError_None && camera_list != nullptr) {
+            const auto count = camera_list->GetCount();
+            for (uint32_t i = 0; i < count; ++i) {
+                const auto* info = camera_list->GetCameraObjectInfo(i);
+                if (!info) continue;
+                CameraSummary camera;
+                camera.index = static_cast<int>(i) + 1;
+                camera.id = build_camera_id(info);
+                camera.name = info->GetName() ? std::string(info->GetName()) : "";
+                camera.model = info->GetModel() ? std::string(info->GetModel()) : "";
+                camera.connection_type = info->GetConnectionTypeName() ? std::string(info->GetConnectionTypeName()) : "";
+                camera.mac_address = info->GetMACAddressChar() ? std::string(info->GetMACAddressChar()) : "";
+                camera.ip_address = info->GetIPAddressChar() ? std::string(info->GetIPAddressChar()) : "";
+                camera.ssh_support = info->GetSSHsupport() == SCRSDK::CrSSHsupport_ON;
+                if (camera.ssh_support) {
+                    char fp[128] = {0};
+                    CrInt32u len = 0;
+                    if (SCRSDK::GetFingerprint(const_cast<SCRSDK::ICrCameraObjectInfo*>(info), fp, &len) == SCRSDK::CrError_None && len > 0) {
+                        camera.fingerprint.assign(fp, fp + len);
+                    }
+                }
+                result.push_back(camera);
+            }
+            camera_list->Release();
+            if (!result.empty()) {
+                logger_.info("Enumerated " + std::to_string(result.size()) + " camera(s)");
+                return result;
+            }
+            logger_.warn("EnumCameraObjects returned 0 camera(s) on attempt " + std::to_string(attempt));
+        } else if (err == SCRSDK::CrError_None) {
+            logger_.warn("EnumCameraObjects returned no camera list on attempt " + std::to_string(attempt));
+        } else {
+            const auto message = "EnumCameraObjects failed: " + sdk_error_to_string(err);
+            set_last_error(message);
+            logger_.warn(message + " (attempt " + std::to_string(attempt) + ")");
+            if (camera_list) camera_list->Release();
+        }
+        if (attempt < kAttempts) std::this_thread::sleep_for(std::chrono::milliseconds(700));
+    }
+
+    logger_.warn("No camera detected after retries");
+    return result;
+}
+
+bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::string& user_id, const std::string& password, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    error.clear();
+    if (!ensure_initialized()) {
+        error = last_error_;
+        return false;
+    }
+    if (connected_) {
+        logger_.info("Disconnecting existing camera before reconnect");
+        SCRSDK::Disconnect(device_handle_);
+        connected_ = false;
+        device_handle_ = 0;
+    }
+
+    SCRSDK::ICrEnumCameraObjectInfo* camera_list = nullptr;
+    auto err = SCRSDK::EnumCameraObjects(&camera_list, 3);
+    if (err != SCRSDK::CrError_None || camera_list == nullptr) {
+        error = "EnumCameraObjects failed: " + sdk_error_to_string(err);
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    SCRSDK::ICrCameraObjectInfo* selected = nullptr;
+    for (uint32_t i = 0; i < camera_list->GetCount(); ++i) {
+        auto* info = const_cast<SCRSDK::ICrCameraObjectInfo*>(camera_list->GetCameraObjectInfo(i));
+        if (!info) continue;
+        if (build_camera_id(info) == camera_id) {
+            selected = info;
+            break;
+        }
+    }
+
+    if (!selected) {
+        camera_list->Release();
+        error = "Requested camera was not found: " + camera_id;
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    std::string fingerprint;
+    if (selected->GetSSHsupport() == SCRSDK::CrSSHsupport_ON) {
+        char fp[128] = {0};
+        CrInt32u len = 0;
+        err = SCRSDK::GetFingerprint(selected, fp, &len);
+        if (err != SCRSDK::CrError_None) {
+            camera_list->Release();
+            error = "GetFingerprint failed: " + sdk_error_to_string(err);
+            set_last_error(error);
+            logger_.error(error);
+            return false;
+        }
+        fingerprint.assign(fp, fp + len);
+    }
+
+    std::promise<void> event_promise;
+    std::future<void> event_future = event_promise.get_future();
+    {
+        std::lock_guard<std::mutex> event_lock(event_mutex_);
+        event_promise_ = &event_promise;
+        pending_property_code_ = 0;
+    }
+
+    logger_.info("Connecting to camera: " + build_camera_id(selected));
+    err = SCRSDK::Connect(
+        selected,
+        &callback_,
+        &device_handle_,
+        SCRSDK::CrSdkControlMode_Remote,
+        SCRSDK::CrReconnecting_ON,
+        user_id.c_str(),
+        password.c_str(),
+        fingerprint.c_str(),
+        static_cast<CrInt32u>(fingerprint.size())
+    );
+
+    if (err != SCRSDK::CrError_None) {
+        camera_list->Release();
+        {
+            std::lock_guard<std::mutex> event_lock(event_mutex_);
+            event_promise_ = nullptr;
+        }
+        error = "Connect failed: " + sdk_error_to_string(err);
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    if (event_future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+        {
+            std::lock_guard<std::mutex> event_lock(event_mutex_);
+            event_promise_ = nullptr;
+        }
+        SCRSDK::Disconnect(device_handle_);
+        connected_ = false;
+        device_handle_ = 0;
+        camera_list->Release();
+        error = "Timed out waiting for camera connection.";
+        set_last_error(error);
+        return false;
+    }
+    try {
+        event_future.get();
+    } catch (const std::exception& ex) {
+        camera_list->Release();
+        {
+            std::lock_guard<std::mutex> event_lock(event_mutex_);
+            event_promise_ = nullptr;
+        }
+        error = std::string("Connection event failed: ") + ex.what();
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    connected_camera_id_ = build_camera_id(selected);
+    connected_camera_model_ = selected->GetModel() ? std::string(selected->GetModel()) : "";
+    connected_camera_name_ = selected->GetName() ? std::string(selected->GetName()) : connected_camera_model_;
+
+    camera_list->Release();
+
+    if (!set_save_info_locked(error)) {
+        logger_.warn("SetSaveInfo skipped/failed: " + error);
+        error.clear();
+    }
+
+    std::string defaults_error;
+    if (!ensure_operational_defaults_locked(defaults_error)) {
+        logger_.warn("Operational defaults could not be fully applied: " + defaults_error);
+    }
+
+    set_last_error("");
+    logger_.info("Connected to " + connected_camera_model_ + " (" + connected_camera_id_ + ")");
+    return true;
+}
+
+bool Fx6SdkService::disconnect_camera(std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    error.clear();
+    if (!connected_) return true;
+
+    const auto err = SCRSDK::Disconnect(device_handle_);
+    if (err != SCRSDK::CrError_None) {
+        error = "Disconnect failed: " + sdk_error_to_string(err);
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    connected_ = false;
+    device_handle_ = 0;
+    connected_camera_id_.clear();
+    connected_camera_model_.clear();
+    connected_camera_name_.clear();
+    logger_.info("Camera disconnected");
+    return true;
+}
+
+bool Fx6SdkService::set_save_info_locked(std::string& error) {
+    error.clear();
+    const auto cwd = current_working_directory();
+    auto err = SCRSDK::SetSaveInfo(device_handle_, const_cast<CrChar*>(cwd.c_str()), const_cast<CrChar*>("FX6"), SCRSDK::CrSETSAVEINFO_AUTO_NUMBER);
+    if (err != SCRSDK::CrError_None) {
+        error = "SetSaveInfo failed: " + sdk_error_to_string(err);
+        return false;
+    }
+    return true;
+}
+
+bool Fx6SdkService::ensure_operational_defaults_locked(std::string& error) {
+    error.clear();
+    // The operator's Gain control is represented by ISO sensitivity.
+    return set_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting,
+                               static_cast<uint64_t>(SCRSDK::CrGainUnitSetting_ISO), error, true);
+}
+
+SCRSDK::CrError Fx6SdkService::get_property_locked(uint32_t code, SCRSDK::CrDeviceProperty& out_property) {
+    if (!connected_) return SCRSDK::CrError_Connect_Disconnected;
+    std::int32_t num_properties = 0;
+    SCRSDK::CrDeviceProperty* property_list = nullptr;
+    const auto err = SCRSDK::GetSelectDeviceProperties(device_handle_, 1, &code, &property_list, &num_properties);
+    const bool found = property_list != nullptr && num_properties >= 1;
+    if (err == SCRSDK::CrError_None && found) {
+        out_property = property_list[0];
+    }
+    if (property_list) {
+        SCRSDK::ReleaseDeviceProperties(device_handle_, property_list);
+    }
+    return err == SCRSDK::CrError_None && !found
+        ? SCRSDK::CrError_Connect_GetProperty : err;
+}
+
+bool Fx6SdkService::set_property_locked(uint32_t code, uint64_t data, std::string& error, bool blocking, bool force) {
+    error.clear();
+    if (!connected_) {
+        error = "Camera is not connected.";
+        return false;
+    }
+
+    SCRSDK::CrDeviceProperty property;
+    auto err = get_property_locked(code, property);
+    if (err != SCRSDK::CrError_None) {
+        error = "Get property failed for " + sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code)) + ": " + sdk_error_to_string(err);
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+    if (!force && property.IsGetEnableCurrentValue() && property.GetCurrentValue() == data) {
+        return true;
+    }
+    if (!property.IsSetEnableCurrentValue()) {
+        error = sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code)) + " is not writable";
+        return false;
+    }
+
+    std::promise<void> event_promise;
+    std::future<void> event_future = event_promise.get_future();
+    if (blocking) {
+        std::lock_guard<std::mutex> event_lock(event_mutex_);
+        pending_property_code_ = code;
+        event_promise_ = &event_promise;
+    }
+
+    property.SetCurrentValue(data);
+    err = SCRSDK::SetDeviceProperty(device_handle_, &property);
+    if (err != SCRSDK::CrError_None) {
+        if (blocking) {
+            std::lock_guard<std::mutex> event_lock(event_mutex_);
+            event_promise_ = nullptr;
+            pending_property_code_ = 0;
+        }
+        error = "Set property failed for " + sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code)) + ": " + sdk_error_to_string(err);
+        set_last_error(error);
+        logger_.error(error);
+        return false;
+    }
+
+    if (blocking) {
+        const auto status = event_future.wait_for(std::chrono::milliseconds(3000));
+        if (status != std::future_status::ready) {
+            {
+                std::lock_guard<std::mutex> event_lock(event_mutex_);
+                event_promise_ = nullptr;
+                pending_property_code_ = 0;
+            }
+            // No notification can be sent for an idempotent forced OFF. The
+            // readback below remains authoritative, including after a timeout.
+            logger_.warn("Property notification timed out; checking readback.");
+        } else {
+            try {
+                event_future.get();
+            } catch (const std::exception& ex) {
+                error = std::string("Property change failed: ") + ex.what();
+                set_last_error(error);
+                logger_.error(error);
+                return false;
+            }
+        }
+    }
+
+    if (blocking) {
+        SCRSDK::CrDeviceProperty confirmed;
+        if (get_property_locked(code, confirmed) != SCRSDK::CrError_None ||
+            !confirmed.IsGetEnableCurrentValue() || confirmed.GetCurrentValue() != data) {
+            error = "Property readback mismatch: " + sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code));
+            set_last_error(error);
+            return false;
+        }
+    }
+    logger_.info("Set " + sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code)) + " -> " + std::to_string(data));
+    return true;
+}
+
+std::vector<uint64_t> Fx6SdkService::extract_possible_values(const SCRSDK::CrDeviceProperty& property) const {
+    const auto data_type = property.GetValueType();
+    const auto* values = property.GetValues();
+    const auto size = property.GetValueSize();
+    if (!values || size == 0) return {};
+
+    switch (data_type) {
+    case SCRSDK::CrDataType_UInt8Array:
+        return extract_array_values<uint8_t>(values, size);
+    case SCRSDK::CrDataType_UInt16Array:
+        return extract_array_values<uint16_t>(values, size);
+    case SCRSDK::CrDataType_UInt32Array:
+        return extract_array_values<uint32_t>(values, size);
+    case SCRSDK::CrDataType_UInt64Array:
+        return extract_array_values<uint64_t>(values, size);
+    case SCRSDK::CrDataType_Int16Array: {
+        auto raw = extract_array_values<int16_t>(values, size);
+        return raw;
+    }
+    case SCRSDK::CrDataType_UInt32Range: {
+        return extract_array_values<uint32_t>(values, size);
+    }
+    case SCRSDK::CrDataType_Int16Range: {
+        return extract_array_values<int16_t>(values, size);
+    }
+    default:
+        return {};
+    }
+}
+
+PropertyView Fx6SdkService::read_property_view_locked(uint32_t code, const std::string&) {
+    PropertyView view;
+    if (!connected_) return view;
+
+    SCRSDK::CrDeviceProperty property;
+    const auto err = get_property_locked(code, property);
+    if (err != SCRSDK::CrError_None) {
+        return view;
+    }
+
+    view.supported = property.IsGetEnableCurrentValue();
+    view.writable = property.IsSetEnableCurrentValue();
+    view.raw = property.GetCurrentValue();
+    view.label = label_for_property(code, view.raw);
+    view.possible = extract_possible_values(property);
+    return view;
+}
+
+std::string Fx6SdkService::label_for_property(uint32_t code, uint64_t raw) const {
+    switch (code) {
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_FNumber: {
+        if (raw == SCRSDK::CrFnumber_IrisClose) return "CLOSE";
+        if (!valid_exposure(ExposureKind::Iris, raw)) return "—";
+        const double value = static_cast<double>(raw) / 100.0;
+        return "F" + format_decimal(value, 2);
+    }
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity:
+        if ((raw & 0x00ffffff) == SCRSDK::CrISO_AUTO) return "ISO AUTO";
+        return "ISO " + comma_separated(exposure_number(ExposureKind::Iso, raw));
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity:
+        return raw == SCRSDK::CrGainBaseIsoSensitivity_High ? "High" : raw == SCRSDK::CrGainBaseIsoSensitivity_Low ? "Low" : std::to_string(raw);
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting:
+        return raw == SCRSDK::CrGainUnitSetting_ISO ? "ISO" : raw == SCRSDK::CrGainUnitSetting_dB ? "dB" : std::to_string(raw);
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilter:
+        return raw == SCRSDK::CrNDFilter_ON ? "ON" : raw == SCRSDK::CrNDFilter_OFF ? "OFF" : std::to_string(raw);
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterModeSetting:
+        return raw == SCRSDK::CrNDFilterModeSetting_Manual ? "Manual" : raw == SCRSDK::CrNDFilterModeSetting_Automatic ? "Automatic" : std::to_string(raw);
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterSwitchingSetting:
+        if (raw == SCRSDK::CrNDFilterSwitchingSetting_Step) return "Step";
+        if (raw == SCRSDK::CrNDFilterSwitchingSetting_Variable) return "Variable";
+        if (raw == SCRSDK::CrNDFilterSwitchingSetting_Preset) return "Preset";
+        return std::to_string(raw);
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterOpticalDensityValue:
+        if (raw == 0 || raw >= 0xffff) return "ND value unavailable";
+        return "1/~" + std::to_string(static_cast<long long>(std::llround(std::pow(10.0, static_cast<double>(raw) / 100.0))))
+            + " (OD " + format_decimal(static_cast<double>(raw) / 100.0, 2) + ")";
+    default:
+        return std::to_string(raw);
+    }
+}
+
+StateSnapshot Fx6SdkService::get_state() {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    StateSnapshot snapshot;
+    snapshot.sdk_initialized = sdk_initialized_;
+    snapshot.connected = connected_;
+    snapshot.camera_id = connected_camera_id_;
+    snapshot.camera_model = connected_camera_model_;
+    snapshot.camera_name = connected_camera_name_;
+    {
+        std::lock_guard<std::mutex> error_lock(error_mutex_);
+        snapshot.last_error = last_error_;
+    }
+    snapshot.log_path = logger_.path();
+    if (!connected_) return snapshot;
+
+    snapshot.iris = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_FNumber);
+    snapshot.iso = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity);
+    snapshot.iso_base = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity);
+    snapshot.gain_unit = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting);
+    snapshot.nd_filter = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilter);
+    snapshot.nd_mode_setting = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterModeSetting);
+    snapshot.nd_switching = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterSwitchingSetting);
+    snapshot.nd_optical_density = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterOpticalDensityValue);
+
+    return snapshot;
+}
+
+bool Fx6SdkService::step_array_property_locked(uint32_t code, int delta, std::string& error) {
+    error.clear();
+    if (delta == 0) return true;
+
+    SCRSDK::CrDeviceProperty property;
+    const auto err = get_property_locked(code, property);
+    if (err != SCRSDK::CrError_None) {
+        error = "Failed to read property: " + sdk_error_to_string(err);
+        return false;
+    }
+    if (!property.IsSetEnableCurrentValue()) {
+        error = sdk_property_name(static_cast<SCRSDK::CrDevicePropertyCode>(code)) + " is not writable";
+        return false;
+    }
+    const auto kind = code == SCRSDK::CrDeviceProperty_FNumber ? ExposureKind::Iris : ExposureKind::Iso;
+    const auto target = exposure_step(kind, extract_possible_values(property), property.GetCurrentValue(), delta);
+    if (!target || !property.IsGetEnableCurrentValue()) {
+        error = "No manual numeric value/steps available. Set Iris / Gain (ISO) to manual on the camera.";
+        return false;
+    }
+    return set_property_locked(code, *target, error, true);
+}
+
+bool Fx6SdkService::step_iris(int delta, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    // Positive delta opens iris by selecting a lower F number.
+    return step_array_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_FNumber, delta > 0 ? -1 : delta < 0 ? 1 : 0, error);
+}
+
+bool Fx6SdkService::step_iso(int delta, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!set_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting,
+                             static_cast<uint64_t>(SCRSDK::CrGainUnitSetting_ISO), error, true)) return false;
+    return step_array_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity, delta, error);
+}
+
+bool Fx6SdkService::toggle_iso_base(std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    auto current = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity);
+    if (!current.supported) {
+        error = "Gain base ISO sensitivity is not supported.";
+        return false;
+    }
+    const auto target = current.raw == SCRSDK::CrGainBaseIsoSensitivity_High
+        ? static_cast<uint64_t>(SCRSDK::CrGainBaseIsoSensitivity_Low)
+        : static_cast<uint64_t>(SCRSDK::CrGainBaseIsoSensitivity_High);
+    return set_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity, target, error, true);
+}
+
+bool Fx6SdkService::set_iso_base(bool high, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    return set_property_locked(
+        SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity,
+        high ? static_cast<uint64_t>(SCRSDK::CrGainBaseIsoSensitivity_High)
+             : static_cast<uint64_t>(SCRSDK::CrGainBaseIsoSensitivity_Low),
+        error,
+        true
+    );
+}
+
+NdController Fx6SdkService::nd_controller_locked() {
+    auto code_for = [](NdProperty property) -> uint32_t {
+        switch (property) {
+        case NdProperty::Filter: return SCRSDK::CrDeviceProperty_NDFilter;
+        case NdProperty::Mode: return SCRSDK::CrDeviceProperty_NDFilterModeSetting;
+        case NdProperty::Switching: return SCRSDK::CrDeviceProperty_NDFilterSwitchingSetting;
+        case NdProperty::Density: return SCRSDK::CrDeviceProperty_NDFilterOpticalDensityValue;
+        }
+        return 0;
+    };
+    return NdController(
+        [this, code_for](NdProperty property) {
+            const auto view = read_property_view_locked(code_for(property));
+            return NdReading{view.supported, view.writable, view.raw, view.possible};
+        },
+        [this, code_for](NdProperty property, uint64_t value, std::string& error) {
+            return set_property_locked(code_for(property), value, error, true,
+                                       property == NdProperty::Filter && value == SCRSDK::CrNDFilter_OFF);
+        },
+        {SCRSDK::CrNDFilter_OFF, SCRSDK::CrNDFilter_ON,
+         SCRSDK::CrNDFilterModeSetting_Manual, SCRSDK::CrNDFilterSwitchingSetting_Step});
+}
+
+bool Fx6SdkService::set_nd(bool enabled, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!connected_) { error = "Camera is not connected."; return false; }
+    const bool ok = nd_controller_locked().set(enabled, error);
+    if (!ok) { set_last_error(error); logger_.error(error); }
+    return ok;
+}
+
+bool Fx6SdkService::step_nd(int delta, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!connected_) { error = "Camera is not connected."; return false; }
+    const bool ok = nd_controller_locked().step(delta, error);
+    if (!ok) { set_last_error(error); logger_.error(error); }
+    return ok;
+}
+
+void Fx6SdkService::Callback::OnConnected(SCRSDK::DeviceConnectionVersioin) {
+    owner_.connected_ = true;
+    owner_.logger_.info("Callback: OnConnected");
+    std::lock_guard<std::mutex> lock(owner_.event_mutex_);
+    if (owner_.event_promise_ && owner_.pending_property_code_ == 0) {
+        owner_.event_promise_->set_value();
+        owner_.event_promise_ = nullptr;
+    }
+}
+
+void Fx6SdkService::Callback::OnError(CrInt32u error) {
+    const std::string message = std::string("Callback: OnError -> ") + sdk_error_to_string(error);
+    owner_.set_last_error(message);
+    owner_.logger_.error(message);
+    std::lock_guard<std::mutex> lock(owner_.event_mutex_);
+    if (owner_.event_promise_) {
+        owner_.event_promise_->set_exception(std::make_exception_ptr(std::runtime_error(message)));
+        owner_.event_promise_ = nullptr;
+    }
+}
+
+void Fx6SdkService::Callback::OnDisconnected(CrInt32u error) {
+    owner_.connected_ = false;
+    const std::string message = std::string("Callback: OnDisconnected -> ") + sdk_error_to_string(error);
+    owner_.logger_.warn(message);
+    std::lock_guard<std::mutex> lock(owner_.event_mutex_);
+    if (owner_.event_promise_) {
+        owner_.event_promise_->set_exception(std::make_exception_ptr(std::runtime_error(message)));
+        owner_.event_promise_ = nullptr;
+    }
+}
+
+void Fx6SdkService::Callback::OnCompleteDownload(CrChar* filename, CrInt32u) {
+    owner_.logger_.info(std::string("Callback: OnCompleteDownload -> ") + (filename ? filename : ""));
+}
+
+void Fx6SdkService::Callback::OnNotifyContentsTransfer(CrInt32u, SCRSDK::CrContentHandle, CrChar* filename) {
+    owner_.logger_.info(std::string("Callback: OnNotifyContentsTransfer -> ") + (filename ? filename : ""));
+}
+
+void Fx6SdkService::Callback::OnWarning(CrInt32u warning) {
+    owner_.logger_.warn(std::string("Callback: OnWarning -> ") + sdk_error_to_string(warning));
+}
+
+void Fx6SdkService::Callback::OnWarningExt(CrInt32u warning, CrInt32 param1, CrInt32 param2, CrInt32 param3) {
+    owner_.logger_.warn(std::string("Callback: OnWarningExt -> ") + sdk_warning_text(warning, param1, param2, param3));
+}
+
+void Fx6SdkService::Callback::OnPropertyChangedCodes(CrInt32u num, CrInt32u* codes) {
+    std::lock_guard<std::mutex> lock(owner_.event_mutex_);
+    for (uint32_t i = 0; i < num; ++i) {
+        if (owner_.pending_property_code_ != 0 && owner_.pending_property_code_ == codes[i]) {
+            owner_.pending_property_code_ = 0;
+            if (owner_.event_promise_) {
+                owner_.event_promise_->set_value();
+                owner_.event_promise_ = nullptr;
+            }
+        }
+    }
+}

@@ -1,0 +1,9 @@
+{
+  "app_name": "FX6 Operation App",
+  "repo_name": "ytv-fx6-remote-control",
+  "bundle_name": "FX6OperationApp",
+  "build_id": "20261001b",
+  "version": "0.4.1",
+  "backend_port": 39061,
+  "release_zip_prefix": "ytv-fx6-remote-control-full-replacement"
+}
