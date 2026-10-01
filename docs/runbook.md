@@ -1,8 +1,8 @@
-# 運用手順 — 20261001b
+# 運用手順 — 20261001c
 
 1. 旧 app と backend を終了し、`lsof -nP -iTCP:39061 -sTCP:LISTEN` で確認します。
 2. zip を新しいフォルダに展開し `FX6OperationApp.app` を起動します。
-3. タイトル・Runtime build が `20261001b` で、backend executable が今回の bundle を指すことを確認します。
+3. タイトル・Runtime build が `20261001c` で、backend executable が今回の bundle を指すことを確認します。
 4. 利用条件の同意欄を確認後、カメラ一覧を更新し、FX6 を選んで認証情報を入力・接続します。0 台の場合は未接続です。
 5. 操作画面をクリックし、i / g / n でモードを選び、u / d で1段操作します。b は ND ON + 最小濃度、m は ND OFF。
 6. 終了ボタン／ウィンドウを閉じて終了します。自動起動した backend は停止し、再利用した backend は残ります。

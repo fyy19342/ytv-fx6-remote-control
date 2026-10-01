@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QLayout,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -38,7 +41,7 @@ except ImportError:
 
 
 CARD_STYLE = """
-QFrame {
+QFrame#metricCard, QFrame#loginCard {
     background-color: #172030;
     border-radius: 14px;
     border: 1px solid #31445f;
@@ -56,15 +59,20 @@ QLabel#cardValue {
 
 WINDOW_STYLE = """
 QWidget {
-    background-color: #0c1522;
     color: #edf2f7;
     font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
 }
+QMainWindow, QStackedWidget, QScrollArea, QWidget#pageSurface {
+    background-color: #0c1522;
+}
+QLabel, QCheckBox { background: transparent; }
 QLineEdit, QComboBox {
     background-color: #132033;
     border: 1px solid #304866;
     border-radius: 10px;
     padding: 8px 10px;
+    min-height: 24px;
+    font-size: 14px;
 }
 QPushButton {
     background-color: #1570ef;
@@ -72,6 +80,8 @@ QPushButton {
     border-radius: 10px;
     padding: 10px 16px;
     font-weight: 700;
+    font-size: 14px;
+    min-height: 24px;
 }
 QPushButton#secondaryButton {
     background-color: #30384a;
@@ -79,12 +89,15 @@ QPushButton#secondaryButton {
 QPushButton#dangerButton {
     background-color: #b91c1c;
 }
+QPushButton:disabled { background-color: #263345; color: #8090a5; }
+QLineEdit:focus, QComboBox:focus { border-color: #60a5fa; }
 """
 
 
 class MetricCard(QFrame):
     def __init__(self, title: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("metricCard")
         self.setStyleSheet(CARD_STYLE)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
@@ -94,6 +107,8 @@ class MetricCard(QFrame):
         self.title_label.setObjectName("cardTitle")
         self.value_label = QLabel("—")
         self.value_label.setObjectName("cardValue")
+        self.value_label.setWordWrap(True)
+        self.value_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.note_label = QLabel("")
         self.note_label.setStyleSheet("color:#7f8da3;font-size:12px;")
         self.note_label.setWordWrap(True)
@@ -123,7 +138,8 @@ class MainWindow(QMainWindow):
         self._closing = False
 
         self.setWindowTitle(f"FX6 Operation App [{self.build_info['build_id']}]")
-        self.resize(1040, 720)
+        self.resize(1040, 800)
+        self.setMinimumSize(800, 600)
         self.setStyleSheet(WINDOW_STYLE)
 
         self.stack = QStackedWidget()
@@ -189,7 +205,7 @@ class MainWindow(QMainWindow):
         runtime_build = runtime.get("buildId", "—")
         runtime_executable = runtime.get("executablePath", "—")
         summary = self.backend.summary()
-        self.login_backend_label.setText(
+        details = (
             "Backend: "
             + summary
             + "\nRuntime build: "
@@ -197,7 +213,10 @@ class MainWindow(QMainWindow):
             + "\nExecutable: "
             + str(runtime_executable)
         )
-        self.card_backend.set_value(str(runtime_build), str(runtime_executable))
+        self.login_backend_label.setText(f"Runtime build: {runtime_build}")
+        self.login_backend_label.setToolTip(details)
+        self.card_backend.set_value(str(runtime_build), "バックエンド稼働中")
+        self.card_backend.setToolTip(details)
         if runtime_build != self.build_info["build_id"] or (
             self.backend.selected_source == "launched-local-binary" and not self.backend.is_running()
         ):
@@ -207,11 +226,23 @@ class MainWindow(QMainWindow):
             return False
         return True
 
+    @staticmethod
+    def _scroll_page(content: QWidget) -> QScrollArea:
+        # Preserve the controls' natural height instead of compressing their text.
+        content.setObjectName("pageSurface")
+        content.layout().setSizeConstraint(QLayout.SetMinimumSize)
+        scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+        return scroll
+
     def _build_login_page(self) -> QWidget:
         root = QWidget()
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(36, 36, 36, 36)
-        layout.setSpacing(24)
+        layout.setContentsMargins(28, 28, 28, 28)
+        layout.setSpacing(16)
 
         heading = QLabel("FX6 Operation App")
         heading_font = QFont()
@@ -226,16 +257,23 @@ class MainWindow(QMainWindow):
         build_badge = QLabel(f"Build {self.build_info['build_id']} / v{self.build_info['version']}")
         build_badge.setStyleSheet(
             "background:#123154;color:#cde5ff;border:1px solid #2b5a8f;"
-            "padding:6px 10px;border-radius:999px;font-weight:700;"
+            "padding:6px 10px;border-radius:8px;font-weight:700;"
         )
 
         form_card = QFrame()
+        form_card.setObjectName("loginCard")
         form_card.setStyleSheet(CARD_STYLE)
         form = QFormLayout(form_card)
         form.setContentsMargins(24, 24, 24, 24)
         form.setSpacing(18)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.camera_combo = QComboBox()
+        self.camera_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.camera_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.camera_combo.setMinimumContentsLength(24)
         self.refresh_button = QPushButton("カメラ一覧を更新")
         self.refresh_button.setObjectName("secondaryButton")
         self.refresh_button.clicked.connect(self.refresh_camera_list)
@@ -248,15 +286,21 @@ class MainWindow(QMainWindow):
 
         self.fingerprint_label = QLabel("—")
         self.fingerprint_label.setStyleSheet("color:#9aa6b2;")
+        self.fingerprint_label.setWordWrap(True)
+        self.fingerprint_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.camera_combo.currentIndexChanged.connect(self._update_fingerprint_label)
 
         self.user_input = QLineEdit("admin")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
+        for field in (self.user_input, self.password_input):
+            field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.connect_button = QPushButton("接続")
         self.connect_button.setEnabled(False)
         self.connect_button.clicked.connect(self.connect_camera)
+        self.connect_button.setMinimumWidth(120)
+        self.connect_button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
 
         usage_notice = QLabel(USAGE_NOTICE_HTML)
         usage_notice.setWordWrap(True)
@@ -278,17 +322,18 @@ class MainWindow(QMainWindow):
         self.login_backend_label = QLabel("Backend: 確認前")
         self.login_backend_label.setWordWrap(True)
         self.login_backend_label.setStyleSheet("color:#9aa6b2;")
+        self.login_backend_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
 
         layout.addWidget(heading)
         layout.addWidget(sub)
-        layout.addWidget(build_badge)
+        layout.addWidget(build_badge, 0, Qt.AlignLeft)
         layout.addWidget(form_card)
         layout.addWidget(usage_notice)
         layout.addWidget(self.usage_consent)
         layout.addWidget(self.login_status)
         layout.addWidget(self.login_backend_label)
         layout.addStretch(1)
-        return root
+        return self._scroll_page(root)
 
     def _build_operation_page(self) -> QWidget:
         root = QWidget()
@@ -316,6 +361,8 @@ class MainWindow(QMainWindow):
         grid = QGridLayout()
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(16)
+        for column in range(3):
+            grid.setColumnStretch(column, 1)
 
         self.card_iris = MetricCard("Iris")
         self.card_iso = MetricCard("Gain (ISO)")
@@ -334,6 +381,7 @@ class MainWindow(QMainWindow):
             "background:#123154;color:#d8ecff;border:1px solid #2b5a8f;"
             "padding:12px 16px;border-radius:12px;font-size:18px;font-weight:700;"
         )
+        self.mode_label.setWordWrap(True)
         self.control_feedback = QLabel("i / g / n で操作モードを選択してください。")
         self.control_feedback.setWordWrap(True)
         self.control_feedback.setStyleSheet("color:#9cb2cf;")
@@ -341,8 +389,9 @@ class MainWindow(QMainWindow):
         footer = QHBoxLayout()
         self.log_path_label = QLabel("Log: —")
         self.log_path_label.setStyleSheet("color:#9aa6b2;")
-        footer.addWidget(self.log_path_label)
-        footer.addStretch(1)
+        self.log_path_label.setWordWrap(True)
+        self.log_path_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        footer.addWidget(self.log_path_label, 1)
 
         self.disconnect_button = QPushButton("切断")
         self.disconnect_button.setObjectName("secondaryButton")
@@ -368,16 +417,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(guide)
         layout.addWidget(self.control_feedback)
         layout.addLayout(footer)
+        layout.addStretch(1)
 
-        root.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        page = self._scroll_page(root)
+        page.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.shortcuts: list[QShortcut] = []
         for key in (*MODE_KEYS, "u", "d", *ND_KEYS):
-            shortcut = QShortcut(QKeySequence(key.upper()), root)
+            shortcut = QShortcut(QKeySequence(key.upper()), page)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.setAutoRepeat(False)
             shortcut.activated.connect(lambda pressed=key: self._handle_hotkey(pressed))
             self.shortcuts.append(shortcut)
-        return root
+        return page
 
     def refresh_camera_list(self) -> None:
         if not self.backend_ready:
@@ -540,8 +591,11 @@ class MainWindow(QMainWindow):
         self.card_camera.set_value(state.get("cameraModel", "—"), state.get("cameraId", ""))
         backend_build = str(self.backend_runtime.get("buildId", "—"))
         backend_path = str(self.backend_runtime.get("executablePath", self.backend.summary()))
-        self.card_backend.set_value(backend_build, backend_path)
-        self.log_path_label.setText(f"Log: {state.get('logPath', '—')}")
+        self.card_backend.set_value(backend_build, "バックエンド稼働中")
+        self.card_backend.setToolTip(backend_path)
+        log_path = str(state.get('logPath', '—'))
+        self.log_path_label.setText(f"Log: {pathlib.Path(log_path).name}")
+        self.log_path_label.setToolTip(log_path)
 
     def disconnect_camera(self) -> None:
         try:

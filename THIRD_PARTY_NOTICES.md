@@ -20,7 +20,7 @@ Qt is dynamically linked. Qt Virtual Keyboard, Qt Quick/QML, Qt PDF and their op
 
 ## Source access and replacing LGPL libraries
 
-The same [GitHub Release](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.1-20261001b) as the app provides `FX6OperationApp-20261001b-open-source-dependencies.tar`, at no charge. It contains the upstream source archives for QtBase, PySide/Shiboken, gettext and libusb, their build files and a SHA256 source manifest. The app package contains this project's source and build scripts. The project has not modified the LGPL library source. Source URL/checksum pins are in `scripts/open_source_dependencies.json`.
+The same [GitHub Release](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.2-20261001c) as the app provides `FX6OperationApp-20261001c-open-source-dependencies.tar`, at no charge. It contains the upstream source archives for QtBase, PySide/Shiboken, gettext and libusb, their build files and a SHA256 source manifest. The app package contains this project's source and build scripts. The project has not modified the LGPL library source. Source URL/checksum pins are in `scripts/open_source_dependencies.json`.
 
 Sony supplies the SDK's libusb binary. Its reported version is 1.0.26; the archive includes that upstream source. Sony's source offer and any SDK-specific source/changes remain available via the [Sony open-source portal](https://oss.sony.net/Products/Linux/) as described in the SDK agreement.
 

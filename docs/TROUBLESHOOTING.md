@@ -1,4 +1,4 @@
-# Troubleshooting — 20261001b
+# Troubleshooting — 20261001c
 
 ## 起動しない
 
@@ -6,7 +6,7 @@
 
 ## 古い backend / ポート競合
 
-`lsof -nP -iTCP:39061 -sTCP:LISTEN` と `/api/health` の `buildId`・`pid`・`executablePath` を照合します。20261001b 以外や buildId 欠落は再利用しません。正体を確認できた対象だけを終了してから再起動してください。無差別な killall は行わないでください。
+`lsof -nP -iTCP:39061 -sTCP:LISTEN` と `/api/health` の `buildId`・`pid`・`executablePath` を照合します。20261001c 以外や buildId 欠落は再利用しません。正体を確認できた対象だけを終了してから再起動してください。無差別な killall は行わないでください。
 
 ## カメラ 0 台 / Adaptor_Create (0x8703)
 

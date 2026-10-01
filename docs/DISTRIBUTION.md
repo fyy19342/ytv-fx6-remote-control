@@ -25,3 +25,5 @@ Release から zip を再ダウンロードして `.sha256` を照合し、別�
 現ビルドは ad-hoc 署名です。Developer ID 証明書・Apple 公証用資格情報がこの環境にないため、公証済みとは表示しません。一般配布用の公証を追加する場合は、Developer ID Application で全バイナリを適切な entitlements と hardened runtime を用いて署名し、`notarytool` で提出・成功確認・staple 後に runtime/self_check を再実行します。証明書や Apple ID のパスワードはリポジトリへ置きません。
 
 実機試験をしていないリリースは prerelease とし、FX6 実機を PASS と記載しません。GitHub の可視性が Private の間、Release もアクセス権を持つユーザーだけが取得できます。
+
+2026-10-01 に公開用リポジトリを独立した履歴で作成しました。以前の SDK 入り履歴は管理者の Private リポジトリへ保管し、公開リポジトリには移していません。以後の push は公開用の `origin` へ通常の branch/tag 単位で行い、旧リポジトリから mirror push しないでください。

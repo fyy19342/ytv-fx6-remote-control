@@ -38,6 +38,10 @@ env = os.environ.copy()
 env['QT_QPA_PLATFORM'] = 'offscreen'
 env['PYTHONPATH'] = str(root / 'frontend-pyside/src')
 run('python-unit-and-qt-shortcuts', [python, '-X', 'faulthandler', '-m', 'unittest', 'discover', '-s', root / 'frontend-pyside/tests', '-v'], env)
+if platform.system() == 'Darwin':
+    native_env = {**env, 'QT_QPA_PLATFORM': 'cocoa', 'FX6_GUI_SCREENSHOT_DIR': str(output / 'gui-layout')}
+    run('native-cocoa-shortcuts-and-layout', [python, '-m', 'unittest', 'discover', '-s',
+        root / 'frontend-pyside/tests', '-p', 'test_gui*.py', '-v'], native_env)
 if not args.skip_build:
     run('cpp-build-and-ctest', ['bash', root / 'scripts/build_backend_macos.sh'])
 else:

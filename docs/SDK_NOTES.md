@@ -1,4 +1,4 @@
-# SDK notes — 20261001b
+# SDK notes — 20261001c
 
 照合元は incoming の Sony Camera Remote SDK 2.01.00 HTML reference と SimpleCli / RemoteCli。展開 release には incoming を含みません。headers/runtime は開発者が backend/vendor/sony にローカルで取り込みます。GitHub と配布 source には含めません。
 

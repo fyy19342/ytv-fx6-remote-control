@@ -36,7 +36,7 @@ jobs:
         run: |
           python -m compileall -q frontend-pyside/src frontend-pyside/tests scripts
           for script in scripts/*.sh frontend-pyside/build_app.sh; do bash -n "$script"; done
-      - name: Keyboard, focus and backend reuse tests
+      - name: Keyboard, layout, focus and backend reuse tests
         run: python -X faulthandler -m unittest discover -s frontend-pyside/tests -v
       - name: SDK-independent C++ tests
         run: |
