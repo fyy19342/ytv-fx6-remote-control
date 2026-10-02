@@ -1,4 +1,4 @@
-# 現行仕様 — 20261001c / 0.4.2
+# 現行仕様 — 20261002a / 0.4.3
 
 操作は [KEYBOARD_CONTROLS](KEYBOARD_CONTROLS.md) を正本とします。GUI はログイン、検出、接続・切断、Iris / Gain (ISO) / ND / Camera / Backend のカード、選択モード、操作結果、終了ボタンを提供します。
 
@@ -8,8 +8,9 @@ QShortcut は操作ページ配下の WidgetWithChildrenShortcut とし、接続
 | --- | --- |
 | GET /api/health | buildId / version / pid / executablePath / cwd / logPath |
 | GET /api/cameras | SDK カメラ列挙（空リストは実機確認成功ではない） |
+| POST /api/cameras/ip | ipAddress で FX6 の指紋を取得。認証・設定変更なし |
 | GET /api/state | 接続、SDK 初期化、プロパティ状態 |
-| POST /api/connect | cameraId, userId, password で接続 |
+| POST /api/connect | cameraId, userId, password, fingerprint で接続。IP 指定時は直前に確認した指紋が必須 |
 | POST /api/disconnect | 切断 |
 | POST /api/iris/step | delta=+1 で小さい F、-1 で大きい F |
 | POST /api/iso/step | delta=+1 で大きい ISO、-1 で小さい ISO |

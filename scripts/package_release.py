@@ -81,7 +81,7 @@ No Stream Deck plugin, npm dependencies, incoming archives, old docs, virtual en
 
 ## Verification limits
 
-PASS / WARN / FAIL / NOT RUN are recorded in SELF_CHECK_{build_id}.md. FX6 physical authentication, lens/ISO/ND response and physical keyboard operation with a camera are NOT RUN. Camera discovery returning zero is WARN, not hardware success. Qt tests use real QShortcut events and an injected API.
+PASS / WARN / FAIL / NOT RUN are recorded in SELF_CHECK_{build_id}.md. Camera discovery, authentication, SDK readback after exposure commands and optical image changes are evaluated separately. Qt tests use real QShortcut events and an injected API. Live camera observations, when present, are tied to the verified artifact digest.
 
 The final archive SHA256 is in the external .zip.sha256 file, avoiding a circular checksum inside this archive. Verification of zip contents is recorded externally in dist/checks/{build_id}/archive-verification.json.
 '''

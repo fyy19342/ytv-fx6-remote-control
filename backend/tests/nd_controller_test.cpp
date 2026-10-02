@@ -28,7 +28,7 @@ struct Camera {
                 if (!(ignore_density && p == NdProperty::Density)) state[p].value = v;
                 if (writes == fail_at) { error = "injected failure after physical write"; return false; }
                 return true;
-            }, {0, 1, 1, 1});
+            }, {0, 1, 1, 1, 2});
     }
 };
 
@@ -75,5 +75,49 @@ int main() {
     already_on.state[NdProperty::Density].writable = false;
     check(!already_on.control().set(true, error) && already_on.state[NdProperty::Filter].value == 0,
           "failed b while ON follows explicit OFF policy");
+    // Actual FX6 readback: Preset mode permits switching to Variable, while
+    // Filter and Density remain read-only until that switch has completed.
+    for (const auto action : {0, 1, 2}) {
+        Camera fx6;
+        fx6.state[NdProperty::Filter] = {true, false, 1, {}};
+        fx6.state[NdProperty::Mode] = {true, false, 1, {0, 1}};
+        fx6.state[NdProperty::Switching] = {true, true, 0, {0, 2}};
+        fx6.state[NdProperty::Density] = {true, false, 90, {}};
+        bool unsupported_write = false;
+        NdController controller([&](auto p) { return fx6.state[p]; },
+            [&](auto p, auto value, std::string&) {
+                ++fx6.writes;
+                if (p == NdProperty::Switching) {
+                    unsupported_write |= value != 2;
+                    fx6.state[NdProperty::Filter].writable = true;
+                    fx6.state[NdProperty::Filter].possible = {0, 1};
+                    fx6.state[NdProperty::Density].writable = true;
+                    fx6.state[NdProperty::Density].possible = {60, 90, 120};
+                }
+                fx6.state[p].value = value;
+                return true;
+            }, {0, 1, 1, 1, 2});
+        check(action == 0 ? controller.set(false, error) :
+              action == 1 ? controller.set(true, error) : controller.step(1, error),
+              "FX6 Preset prepares Variable before OFF/ON/step");
+        check(!unsupported_write, "FX6 never receives unsupported Step mode");
+        check(fx6.state[NdProperty::Switching].value == 2, "FX6 Variable readback");
+        check(action == 0 ? fx6.state[NdProperty::Filter].value == 0 :
+              fx6.state[NdProperty::Density].value == (action == 1 ? 60 : 120),
+              "FX6 command reaches requested value");
+    }
+    Camera transmittance;
+    const uint64_t nd4 = (1ULL << 32) | 4;
+    const uint64_t nd48 = (10ULL << 32) | 48;
+    const uint64_t nd8 = (1ULL << 32) | 8;
+    transmittance.state[NdProperty::Switching] = {true, true, 2, {0, 2}};
+    transmittance.state[NdProperty::Density] = {true, true, nd8, {nd8, nd48, nd4}};
+    NdController tx([&](auto p) { return transmittance.state[p]; },
+        [&](auto p, auto value, std::string&) { transmittance.state[p].value = value; return true; },
+        {0, 1, 1, 1, 2, NdValueFormat::Transmittance});
+    check(tx.set(true, error) && transmittance.state[NdProperty::Density].value == nd4, "FX6 ON uses transmittance minimum");
+    check(tx.step(1, error) && transmittance.state[NdProperty::Density].value == nd48, "FX6 d writes exact fraction");
+    check(tx.step(-1, error) && transmittance.state[NdProperty::Density].value == nd4, "FX6 u restores exact fraction");
+    check(tx.set(false, error) && !tx.step(1, error), "FX6 OFF remains OFF on step");
     std::cout << "nd_controller_test passed (including injected SDK failures)\n";
 }

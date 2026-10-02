@@ -64,6 +64,20 @@ if native_observation.exists():
     if (observed.get('build_id') == info['build_id'] and
             observed.get('artifacts_sha256') == fingerprints(root)['artifacts_sha256']):
         results.append(observed['result'])
+camera_observation = output / 'camera-observation.json'
+camera_verified = False
+if camera_observation.exists():
+    observed = json.loads(camera_observation.read_text())
+    if (observed.get('build_id') == info['build_id'] and
+            observed.get('artifacts_sha256') == fingerprints(root)['artifacts_sha256']):
+        results.extend(observed['results'])
+        camera_verified = True
+    else:
+        results.append({'check': 'camera observation stamp', 'status': 'WARN',
+                        'detail': 'Camera evidence belongs to different artifacts; it was not reused.'})
+if not camera_verified:
+    results.append({'check': 'FX6 authentication and exposure operation', 'status': 'NOT RUN',
+                    'detail': 'No camera observation for these exact artifacts. Qt tests use an injected API.'})
 report = {'build_id': info['build_id'], 'version': info['version'],
           'time': datetime.datetime.now().astimezone().isoformat(), 'environment': platform.platform(), 'results': results,
           'fingerprints': fingerprints(root)}
@@ -80,6 +94,6 @@ for result in results:
         detail = f'build={h["buildId"]}, PID={h["pid"]}, SDK initialized, cameras={result["camera_count"]}; verification/results.json'
     lines.append(f'| {result["status"]} | {result["check"]} | {detail} |')
 lines += ['', '詳細ログはローカル dist/checks に保存。公開配布の verification/ はパスを置換した結果 JSON のみ。過去 build の結果は流用していない。',
-          'FX6 の認証・実レンズ・ND の光学的変化・物理キーボードによる実機操作は NOT RUN。', '']
+          '実機認証・キー操作・SDK 読み戻し・映像の光学的変化は個別の項目として判定する。記載のない試験を実施済みとは扱わない。', '']
 (root / 'docs' / f'SELF_CHECK_{info["build_id"]}.md').write_text('\n'.join(lines))
 raise SystemExit(1 if any(r['status'] == 'FAIL' for r in results) else 0)

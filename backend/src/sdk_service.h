@@ -51,6 +51,7 @@ struct StateSnapshot {
     PropertyView nd_mode_setting;
     PropertyView nd_switching;
     PropertyView nd_optical_density;
+    PropertyView nd_value;
 };
 
 class Fx6SdkService {
@@ -59,7 +60,9 @@ public:
     ~Fx6SdkService();
 
     std::vector<CameraSummary> enumerate_cameras();
-    bool connect_camera(const std::string& camera_id, const std::string& user_id, const std::string& password, std::string& error);
+    bool probe_camera_ip(const std::string& address, CameraSummary& camera, std::string& error);
+    bool connect_camera(const std::string& camera_id, const std::string& user_id, const std::string& password,
+                        std::string& error, const std::string& expected_fingerprint = "");
     bool disconnect_camera(std::string& error);
 
     StateSnapshot get_state();
@@ -91,6 +94,7 @@ private:
     };
 
     bool ensure_initialized();
+    SCRSDK::ICrCameraObjectInfo* create_ip_camera_locked(const std::string& address, std::string& error);
     void release_sdk();
     void set_last_error(const std::string& message);
     std::string build_camera_id(const SCRSDK::ICrCameraObjectInfo* info) const;
@@ -112,6 +116,7 @@ private:
     Callback callback_;
     std::mutex sdk_mutex_;
     bool sdk_initialized_ = false;
+    std::optional<CameraSummary> direct_camera_;
     std::atomic<bool> connected_{false};
     SCRSDK::CrDeviceHandle device_handle_ = 0;
     std::string connected_camera_id_;

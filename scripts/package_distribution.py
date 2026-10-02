@@ -71,9 +71,10 @@ FILE_SHA256.json records every regular file (symlinks are retained by ditto).
 The archive checksum is in the external .zip.sha256 sidecar. The separate open-source-dependencies.tar
 release asset supplies LGPL source archives; it contains no Sony proprietary SDK.
 
-PASS/WARN/FAIL/NOT RUN are separate in SELF_CHECK. Camera enumeration returned zero (WARN).
-FX6 authentication and optical/lens/ISO/ND behavior are NOT RUN. CI covers SDK-independent tests;
-only the local runtime check exercises SDK initialization and Cocoa app launch.
+PASS/WARN/FAIL/NOT RUN are separate in SELF_CHECK and verification/results.json.
+Camera discovery, authentication, SDK readback after exposure commands, and optical image changes
+are separate checks. CI covers SDK-independent tests. Local runtime checks exercise SDK
+initialization and Cocoa app launch; any live camera evidence is tied to the verified artifact digest.
 '''
 for path in [stage / f'DISTRIBUTION_MANIFEST_{build_id}.md', root / 'docs' / f'DISTRIBUTION_MANIFEST_{build_id}.md']:
     path.write_text(manifest)

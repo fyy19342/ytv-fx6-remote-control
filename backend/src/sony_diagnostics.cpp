@@ -20,6 +20,7 @@ std::string sdk_property_name(SCRSDK::CrDevicePropertyCode code) {
     case SCRSDK::CrDeviceProperty_GainUnitSetting: return "GainUnitSetting";
     case SCRSDK::CrDeviceProperty_GainBaseIsoSensitivity: return "GainBaseIsoSensitivity";
     case SCRSDK::CrDeviceProperty_NDFilter: return "NDFilter";
+    case SCRSDK::CrDeviceProperty_NDFilterValue: return "NDFilterValue";
     case SCRSDK::CrDeviceProperty_NDFilterModeSetting: return "NDFilterModeSetting";
     case SCRSDK::CrDeviceProperty_NDFilterSwitchingSetting: return "NDFilterSwitchingSetting";
     case SCRSDK::CrDeviceProperty_NDFilterOpticalDensityValue: return "NDFilterOpticalDensityValue";

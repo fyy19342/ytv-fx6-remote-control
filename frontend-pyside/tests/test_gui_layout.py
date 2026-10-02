@@ -58,9 +58,9 @@ class GuiLayoutTest(unittest.TestCase):
                 self.assertEqual(self.window.width(), width, "Content must not force the window wider")
                 card = self.window.findChild(QFrame, "loginCard")
                 self.assertGreater(self.window.user_input.width(), card.width() * .60)
-                for field in (self.window.user_input, self.window.password_input):
+                for field in (self.window.user_input, self.window.password_input, self.window.ip_input):
                     self.assertGreaterEqual(field.height(), field.fontMetrics().height() + 16)
-                for button in (self.window.refresh_button, self.window.connect_button):
+                for button in (self.window.refresh_button, self.window.connect_button, self.window.ip_probe_button):
                     self.button_text_fits(button)
                 combo = self.window.camera_combo
                 option = QStyleOptionComboBox()

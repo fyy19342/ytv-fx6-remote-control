@@ -2,17 +2,19 @@
 
 [![CI](https://github.com/fyy19342/ytv-fx6-remote-control/actions/workflows/ci.yml/badge.svg)](https://github.com/fyy19342/ytv-fx6-remote-control/actions/workflows/ci.yml)
 
-Sony FX6 を Sony Camera Remote SDK 経由で操作する macOS アプリです。**0.4.2 / build 20261001c**。アプリにフォーカスがある間、ログイン後の操作画面でキーボード操作が有効になります。Gain は SDK の ISO sensitivity として扱い、GUI では **Gain (ISO)** と表示します。
+Sony FX6 を Sony Camera Remote SDK 経由で操作する macOS アプリです。**0.4.3 / build 20261002a**。アプリにフォーカスがある間、ログイン後の操作画面でキーボード操作が有効になります。Gain は SDK の ISO sensitivity として扱い、GUI では **Gain (ISO)** と表示します。
 
-0.4.2 ではログインフォームの縮み、日本語ボタンの文字切れ、不要なラベル枠を修正しました。最小 800×600 のウィンドウで縦スクロールに対応します。
+0.4.3 では自動検出で見つからない FX6 を IPv4 アドレスで指定できるようにしました。「FX6 IP → IP を確認」で指紋を取得し、本体の表示と照合してからログインします。ND も FX6 対応の Variable モード・透過率プロパティへ修正しました。フォームの文字切れ修正と、最小 800×600 の縦スクロール表示にも対応しています。
 
 ## ダウンロード
 
-[**GitHub Release — 0.4.2 / 20261001c**](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.2-20261001c) の `FX6OperationApp-20261001c-macos-arm64.zip` と `.zip.sha256` をダウンロードしてください。GitHub が自動生成する「Source code」にはアプリは入っていません。
+[**GitHub Release — 0.4.3 / 20261002a**](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.3-20261002a) の `FX6OperationApp-20261002a-macos-arm64.zip` と `.zip.sha256` をダウンロードしてください。GitHub が自動生成する「Source code」にはアプリは入っていません。
 
 [利用条件](docs/TERMS.md) に同意した場合にダウンロード・使用してください。Sony 公式アプリではありません。本アプリで使用・制御した機器のメーカー保証について Sony SDK 規約上の条件があります。
 
-Apple Silicon 向けの評価版です。Apple 公証と FX6 実機の認証・光学変化は未確認です。確認済みの内容と制約は [SELF_CHECK](docs/SELF_CHECK_20261001c.md) に記載しています。インストール方法・対応 OS は [INSTALL](docs/INSTALL.md) を参照してください。
+Apple Silicon 向けの評価版です。Apple 公証は未実施です。実機の検出・認証・設定値の読み戻し・映像の変化は別々に判定し、確認済みの内容と制約を [SELF_CHECK](docs/SELF_CHECK_20261002a.md) に記載しています。インストール方法・対応 OS は [INSTALL](docs/INSTALL.md) を参照してください。
+
+実機の Wi-Fi 認証、GUI のキー操作、ND 全21段（1/4〜1/128）の往復・上下限・ON/OFF は SDK 読み戻しで確認済みです。映像の光学的変化の測定は未実施です。
 
 ## キー操作
 

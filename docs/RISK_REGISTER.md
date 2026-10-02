@@ -1,4 +1,4 @@
-# 検証範囲と残る制約 — 20261001c
+# 検証範囲と残る制約 — 20261002a
 
 | 項目 | 対応と残る制約 |
 | --- | --- |
@@ -9,7 +9,7 @@
 | 旧 backend | 起動前後の build ID とプロセスを照合。自己確認は port/PID/path を確認 |
 | runtime 欠落・開発パス依存 | runtime 8ファイルの load command 解決と単体・同梱 backend 起動を確認 |
 | バージョン混在 | root/source/app/runtime stamp と Info.plist と runtime health を照合 |
-| FX6 実機 | 実際の機種設定・ファームウェア・レンズへの適合と光学変化は未検証 |
+| FX6 実機 | 検証した個体・状態の範囲を SELF_CHECK に記載。他のファームウェアやレンズを含む全組合せの互換性は未検証 |
 | macOS 配布 | arm64 / ad-hoc 署名。Apple 公証・Intel 動作・他の macOS バージョンは未検証 |
 
-ND の手動・Step 設定は失敗時に残る場合があります。ND ON を複数の SDK 呼出しで処理するため、切替途中の一時値を保証する機構はありません。
+ND の手動・Variable 設定は失敗時に残る場合があります。ND ON を複数の SDK 呼出しで処理するため、切替途中の一時値を保証する機構はありません。

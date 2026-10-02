@@ -105,7 +105,8 @@ std::string state_to_json(const StateSnapshot& state) {
         << "\"ndFilter\":" << property_to_json(state.nd_filter) << ','
         << "\"ndModeSetting\":" << property_to_json(state.nd_mode_setting) << ','
         << "\"ndSwitching\":" << property_to_json(state.nd_switching) << ','
-        << "\"ndOpticalDensity\":" << property_to_json(state.nd_optical_density)
+        << "\"ndOpticalDensity\":" << property_to_json(state.nd_optical_density) << ','
+        << "\"ndValue\":" << property_to_json(state.nd_value)
         << '}';
     return oss.str();
 }
@@ -160,12 +161,23 @@ int main(int argc, char** argv) {
         res.set_content(success_response(payload.str()), "application/json; charset=utf-8");
     });
 
+    server.Post("/api/cameras/ip", [&](const httplib::Request& req, httplib::Response& res) {
+        CameraSummary camera;
+        std::string error;
+        if (!service.probe_camera_ip(req.get_param_value("ipAddress"), camera, error)) {
+            res.status = 400;
+            res.set_content(error_response(error), "application/json; charset=utf-8");
+            return;
+        }
+        res.set_content(success_response(camera_to_json(camera)), "application/json; charset=utf-8");
+    });
+
     server.Post("/api/connect", [&](const httplib::Request& req, httplib::Response& res) {
         const auto camera_id = req.get_param_value("cameraId");
         const auto user = req.get_param_value("userId");
         const auto password = req.get_param_value("password");
         std::string error;
-        if (!service.connect_camera(camera_id, user, password, error)) {
+        if (!service.connect_camera(camera_id, user, password, error, req.get_param_value("fingerprint"))) {
             res.status = 400;
             res.set_content(error_response(error), "application/json; charset=utf-8");
             return;

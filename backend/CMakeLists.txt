@@ -105,9 +105,12 @@ add_test(NAME nd_controller_test COMMAND nd_controller_test)
 add_executable(exposure_steps_test tests/exposure_steps_test.cpp)
 target_include_directories(exposure_steps_test PRIVATE src)
 add_test(NAME exposure_steps_test COMMAND exposure_steps_test)
+add_executable(network_target_test tests/network_target_test.cpp)
+target_include_directories(network_target_test PRIVATE src)
+add_test(NAME network_target_test COMMAND network_target_test)
 
 # These tests use assert; keep the assertions active in Release builds too.
-foreach(test_target nd_state_machine_test nd_controller_test exposure_steps_test)
+foreach(test_target nd_state_machine_test nd_controller_test exposure_steps_test network_target_test)
   if(MSVC)
     target_compile_options(${test_target} PRIVATE /UNDEBUG)
   else()

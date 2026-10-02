@@ -88,5 +88,6 @@ app = BUNDLE(
         "CFBundleShortVersionString": version,
         "CFBundleVersion": build_id,
         "LSMinimumSystemVersion": "15.0",
+        "NSLocalNetworkUsageDescription": "同じネットワークの Sony FX6 を検出し、認証・露出操作を行います。",
     },
 )

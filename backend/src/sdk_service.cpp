@@ -7,6 +7,7 @@
 #include <future>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -17,6 +18,7 @@
 
 #include "sony_diagnostics.h"
 #include "exposure_steps.h"
+#include "network_target.h"
 
 namespace {
 
@@ -153,7 +155,7 @@ std::vector<CameraSummary> Fx6SdkService::enumerate_cameras() {
                 if (camera.ssh_support) {
                     char fp[128] = {0};
                     CrInt32u len = 0;
-                    if (SCRSDK::GetFingerprint(const_cast<SCRSDK::ICrCameraObjectInfo*>(info), fp, &len) == SCRSDK::CrError_None && len > 0) {
+                    if (SCRSDK::GetFingerprint(const_cast<SCRSDK::ICrCameraObjectInfo*>(info), fp, &len) == SCRSDK::CrError_None && len > 0 && len <= sizeof(fp)) {
                         camera.fingerprint.assign(fp, fp + len);
                     }
                 }
@@ -180,7 +182,57 @@ std::vector<CameraSummary> Fx6SdkService::enumerate_cameras() {
     return result;
 }
 
-bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::string& user_id, const std::string& password, std::string& error) {
+SCRSDK::ICrCameraObjectInfo* Fx6SdkService::create_ip_camera_locked(const std::string& address, std::string& error) {
+    auto target = parse_network_target(address);
+    if (!target) {
+        error = "Enter a valid unicast IPv4 address (example: 192.168.0.5).";
+        return nullptr;
+    }
+    SCRSDK::ICrCameraObjectInfo* camera = nullptr;
+    const auto err = SCRSDK::CreateCameraObjectInfoEthernetConnection(&camera,
+        SCRSDK::CrCameraDeviceModel_ILME_FX6, target->sdk_ip, target->object_id.data(), SCRSDK::CrSSHsupport_ON);
+    if (err != SCRSDK::CrError_None || !camera) {
+        if (camera) camera->Release();
+        error = "Create IP camera failed: " + sdk_error_to_string(err);
+        return nullptr;
+    }
+    return camera;
+}
+
+bool Fx6SdkService::probe_camera_ip(const std::string& address, CameraSummary& camera, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    error.clear();
+    if (!ensure_initialized()) { error = "SDK is not initialized"; return false; }
+    if (connected_) { error = "Disconnect the current camera before checking another IP."; return false; }
+    direct_camera_.reset();
+    const auto release = [](SCRSDK::ICrCameraObjectInfo* value) { if (value) value->Release(); };
+    std::unique_ptr<SCRSDK::ICrCameraObjectInfo, decltype(release)> object(create_ip_camera_locked(address, error), release);
+    if (!object) return false;
+    char fingerprint[128] = {};
+    CrInt32u length = 0;
+    const auto err = SCRSDK::GetFingerprint(object.get(), fingerprint, &length);
+    if (err != SCRSDK::CrError_None || length == 0 || length > sizeof(fingerprint)) {
+        error = "IP fingerprint check failed: " + sdk_error_to_string(err) +
+            ". Check the camera IP, Camera Remote Control setting and local network permission.";
+        set_last_error(error);
+        return false;
+    }
+    camera = {};
+    camera.id = "ip:" + address;
+    camera.name = "FX6 (IP direct)";
+    camera.model = "ILME-FX6";
+    camera.connection_type = "IP direct (SSH)";
+    camera.ip_address = address;
+    camera.ssh_support = true;
+    camera.fingerprint.assign(fingerprint, length);
+    direct_camera_ = camera;
+    set_last_error("");
+    logger_.info("IP camera fingerprint obtained; authentication has not run");
+    return true;
+}
+
+bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::string& user_id, const std::string& password,
+                                 std::string& error, const std::string& expected_fingerprint) {
     std::lock_guard<std::mutex> lock(sdk_mutex_);
     error.clear();
     if (!ensure_initialized()) {
@@ -194,27 +246,37 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
         device_handle_ = 0;
     }
 
-    SCRSDK::ICrEnumCameraObjectInfo* camera_list = nullptr;
-    auto err = SCRSDK::EnumCameraObjects(&camera_list, 3);
-    if (err != SCRSDK::CrError_None || camera_list == nullptr) {
-        error = "EnumCameraObjects failed: " + sdk_error_to_string(err);
-        set_last_error(error);
-        logger_.error(error);
-        return false;
-    }
-
+    const auto release_list = [](SCRSDK::ICrEnumCameraObjectInfo* p) { if (p) p->Release(); };
+    const auto release_camera = [](SCRSDK::ICrCameraObjectInfo* p) { if (p) p->Release(); };
+    std::unique_ptr<SCRSDK::ICrEnumCameraObjectInfo, decltype(release_list)> camera_list(nullptr, release_list);
+    std::unique_ptr<SCRSDK::ICrCameraObjectInfo, decltype(release_camera)> direct_object(nullptr, release_camera);
     SCRSDK::ICrCameraObjectInfo* selected = nullptr;
-    for (uint32_t i = 0; i < camera_list->GetCount(); ++i) {
-        auto* info = const_cast<SCRSDK::ICrCameraObjectInfo*>(camera_list->GetCameraObjectInfo(i));
-        if (!info) continue;
-        if (build_camera_id(info) == camera_id) {
-            selected = info;
-            break;
+    SCRSDK::CrError err = SCRSDK::CrError_None;
+    if (camera_id.rfind("ip:", 0) == 0) {
+        if (!direct_camera_ || direct_camera_->id != camera_id || expected_fingerprint.empty() ||
+                direct_camera_->fingerprint != expected_fingerprint) {
+            error = "Check the IP and displayed fingerprint again before connecting.";
+            return false;
+        }
+        direct_object.reset(create_ip_camera_locked(direct_camera_->ip_address, error));
+        if (!direct_object) return false;
+        selected = direct_object.get();
+    } else {
+        SCRSDK::ICrEnumCameraObjectInfo* list = nullptr;
+        err = SCRSDK::EnumCameraObjects(&list, 3);
+        camera_list.reset(list);
+        if (err != SCRSDK::CrError_None || !camera_list) {
+            error = "Camera discovery failed: " + sdk_error_to_string(err) + ". Try IP direct connection.";
+            set_last_error(error);
+            return false;
+        }
+        for (uint32_t i = 0; i < camera_list->GetCount(); ++i) {
+            auto* info = const_cast<SCRSDK::ICrCameraObjectInfo*>(camera_list->GetCameraObjectInfo(i));
+            if (info && build_camera_id(info) == camera_id) { selected = info; break; }
         }
     }
 
     if (!selected) {
-        camera_list->Release();
         error = "Requested camera was not found: " + camera_id;
         set_last_error(error);
         logger_.error(error);
@@ -226,14 +288,17 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
         char fp[128] = {0};
         CrInt32u len = 0;
         err = SCRSDK::GetFingerprint(selected, fp, &len);
-        if (err != SCRSDK::CrError_None) {
-            camera_list->Release();
+        if (err != SCRSDK::CrError_None || len == 0 || len > sizeof(fp)) {
             error = "GetFingerprint failed: " + sdk_error_to_string(err);
             set_last_error(error);
             logger_.error(error);
             return false;
         }
         fingerprint.assign(fp, fp + len);
+        if (!expected_fingerprint.empty() && fingerprint != expected_fingerprint) {
+            error = "Camera fingerprint changed. Recheck the camera identity before connecting.";
+            return false;
+        }
     }
 
     std::promise<void> event_promise;
@@ -258,7 +323,6 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
     );
 
     if (err != SCRSDK::CrError_None) {
-        camera_list->Release();
         {
             std::lock_guard<std::mutex> event_lock(event_mutex_);
             event_promise_ = nullptr;
@@ -277,7 +341,6 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
         SCRSDK::Disconnect(device_handle_);
         connected_ = false;
         device_handle_ = 0;
-        camera_list->Release();
         error = "Timed out waiting for camera connection.";
         set_last_error(error);
         return false;
@@ -285,7 +348,6 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
     try {
         event_future.get();
     } catch (const std::exception& ex) {
-        camera_list->Release();
         {
             std::lock_guard<std::mutex> event_lock(event_mutex_);
             event_promise_ = nullptr;
@@ -296,11 +358,12 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
         return false;
     }
 
-    connected_camera_id_ = build_camera_id(selected);
+    connected_camera_id_ = camera_id;
     connected_camera_model_ = selected->GetModel() ? std::string(selected->GetModel()) : "";
     connected_camera_name_ = selected->GetName() ? std::string(selected->GetName()) : connected_camera_model_;
 
-    camera_list->Release();
+    camera_list.reset();
+    direct_object.reset();
 
     if (!set_save_info_locked(error)) {
         logger_.warn("SetSaveInfo skipped/failed: " + error);
@@ -530,6 +593,12 @@ std::string Fx6SdkService::label_for_property(uint32_t code, uint64_t raw) const
         if (raw == 0 || raw >= 0xffff) return "ND value unavailable";
         return "1/~" + std::to_string(static_cast<long long>(std::llround(std::pow(10.0, static_cast<double>(raw) / 100.0))))
             + " (OD " + format_decimal(static_cast<double>(raw) / 100.0, 2) + ")";
+    case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterValue: {
+        const auto numerator = raw >> 32;
+        const auto denominator = raw & 0xffffffff;
+        if (numerator == 0 || numerator >= denominator) return "ND value unavailable";
+        return "1/" + format_decimal(static_cast<double>(denominator) / numerator, 2);
+    }
     default:
         return std::to_string(raw);
     }
@@ -558,6 +627,7 @@ StateSnapshot Fx6SdkService::get_state() {
     snapshot.nd_mode_setting = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterModeSetting);
     snapshot.nd_switching = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterSwitchingSetting);
     snapshot.nd_optical_density = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterOpticalDensityValue);
+    snapshot.nd_value = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilterValue);
 
     return snapshot;
 }
@@ -628,7 +698,9 @@ NdController Fx6SdkService::nd_controller_locked() {
         case NdProperty::Filter: return SCRSDK::CrDeviceProperty_NDFilter;
         case NdProperty::Mode: return SCRSDK::CrDeviceProperty_NDFilterModeSetting;
         case NdProperty::Switching: return SCRSDK::CrDeviceProperty_NDFilterSwitchingSetting;
-        case NdProperty::Density: return SCRSDK::CrDeviceProperty_NDFilterOpticalDensityValue;
+        // FX6 supports transmittance. OpticalDensityValue is a different model's
+        // property; apparent readback on FX6 can settle to a different value.
+        case NdProperty::Density: return SCRSDK::CrDeviceProperty_NDFilterValue;
         }
         return 0;
     };
@@ -642,7 +714,8 @@ NdController Fx6SdkService::nd_controller_locked() {
                                        property == NdProperty::Filter && value == SCRSDK::CrNDFilter_OFF);
         },
         {SCRSDK::CrNDFilter_OFF, SCRSDK::CrNDFilter_ON,
-         SCRSDK::CrNDFilterModeSetting_Manual, SCRSDK::CrNDFilterSwitchingSetting_Step});
+         SCRSDK::CrNDFilterModeSetting_Manual, SCRSDK::CrNDFilterSwitchingSetting_Step,
+         SCRSDK::CrNDFilterSwitchingSetting_Variable, NdValueFormat::Transmittance});
 }
 
 bool Fx6SdkService::set_nd(bool enabled, std::string& error) {
@@ -650,6 +723,7 @@ bool Fx6SdkService::set_nd(bool enabled, std::string& error) {
     if (!connected_) { error = "Camera is not connected."; return false; }
     const bool ok = nd_controller_locked().set(enabled, error);
     if (!ok) { set_last_error(error); logger_.error(error); }
+    else set_last_error("");
     return ok;
 }
 
@@ -658,6 +732,7 @@ bool Fx6SdkService::step_nd(int delta, std::string& error) {
     if (!connected_) { error = "Camera is not connected."; return false; }
     const bool ok = nd_controller_locked().step(delta, error);
     if (!ok) { set_last_error(error); logger_.error(error); }
+    else set_last_error("");
     return ok;
 }
 

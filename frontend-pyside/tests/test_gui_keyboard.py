@@ -91,6 +91,36 @@ class GuiKeyboardTest(unittest.TestCase):
         self.window.usage_consent.setChecked(False)
         self.assertFalse(self.window.connect_button.isEnabled())
 
+    def test_direct_ip_probe_selects_target_without_authentication(self):
+        camera = {"id": "ip:192.168.0.5", "ipAddress": "192.168.0.5", "fingerprint": "test-fingerprint"}
+        self.window.backend_ready = True
+        self.window.ip_input.setText("192.168.0.5")
+        with patch.object(self.api, "post", return_value=camera) as post:
+            self.window.probe_camera_ip()
+            post.assert_called_once_with("/api/cameras/ip", {"ipAddress": "192.168.0.5"})
+        self.assertEqual(self.window.camera_combo.currentData(), camera["id"])
+        self.assertEqual(self.window.fingerprint_label.text(), camera["fingerprint"])
+        self.assertFalse(self.window.camera_connected)
+        self.assertFalse(self.window.usage_consent.isChecked())
+        self.window.usage_consent.setChecked(True)
+        self.window.connect_camera()
+        self.window.refresh_timer.stop()
+        self.assertEqual(self.api.calls[0][1]["fingerprint"], camera["fingerprint"])
+
+    def test_failed_ip_probe_does_not_leave_stale_target_selected(self):
+        self.window.backend_ready = True
+        self.window.camera_combo.addItem("Old camera", "ip:192.168.0.5")
+        self.window.ip_input.setText("bad address")
+        with patch.object(self.api, "post", side_effect=ApiError("Invalid IPv4 address")):
+            self.window.probe_camera_ip()
+        self.assertIsNone(self.window.camera_combo.currentData())
+        self.assertIn("Invalid IPv4", self.window.login_status.text())
+        self.assertTrue(self.window.ip_probe_button.isEnabled())
+
+    def test_empty_ip_does_not_call_backend(self):
+        self.window.probe_camera_ip()
+        self.assertEqual(self.api.calls, [])
+
     def test_all_modes_and_directions_via_real_shortcuts(self):
         self.operation()
         self.key("u")
@@ -111,6 +141,13 @@ class GuiKeyboardTest(unittest.TestCase):
         self.key("gbm")
         self.assertEqual(self.window.control_mode, ControlMode.GAIN)
         self.assertEqual([p for p, _ in self.api.calls], ["/api/nd/on", "/api/nd/off"])
+
+    def test_nd_uses_fx6_transmittance_readback(self):
+        self.operation()
+        state = {**self.api.state, "ndFilter": {"label": "ON"}, "ndValue": {"label": "1/4.8"},
+                 "ndOpticalDensity": {"label": "different-model-property"}}
+        self.window._render_state(state)
+        self.assertEqual(self.window.card_nd.value_label.text(), "1/4.8")
 
     def test_child_button_focus_and_no_repeat_or_modifiers(self):
         self.operation()

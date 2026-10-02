@@ -284,6 +284,18 @@ class MainWindow(QMainWindow):
         camera_row_layout.addWidget(self.camera_combo, 1)
         camera_row_layout.addWidget(self.refresh_button)
 
+        self.ip_input = QLineEdit()
+        self.ip_input.setPlaceholderText("例: 192.168.0.5")
+        self.ip_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.ip_probe_button = QPushButton("IP を確認")
+        self.ip_probe_button.setObjectName("secondaryButton")
+        self.ip_probe_button.clicked.connect(self.probe_camera_ip)
+        ip_row = QWidget()
+        ip_layout = QHBoxLayout(ip_row)
+        ip_layout.setContentsMargins(0, 0, 0, 0)
+        ip_layout.addWidget(self.ip_input, 1)
+        ip_layout.addWidget(self.ip_probe_button)
+
         self.fingerprint_label = QLabel("—")
         self.fingerprint_label.setStyleSheet("color:#9aa6b2;")
         self.fingerprint_label.setWordWrap(True)
@@ -311,6 +323,7 @@ class MainWindow(QMainWindow):
         self.usage_consent.toggled.connect(self.connect_button.setEnabled)
 
         form.addRow("Camera", camera_row)
+        form.addRow("FX6 IP", ip_row)
         form.addRow("Fingerprint", self.fingerprint_label)
         form.addRow("User", self.user_input)
         form.addRow("Password", self.password_input)
@@ -468,8 +481,39 @@ class MainWindow(QMainWindow):
         if cameras:
             self._set_login_status(f"{len(cameras)} 台のカメラを検出しました。", "ok")
         else:
-            self._set_login_status("0 台のカメラを検出しました。検出ボタンで再試行してください。", "warn")
+            self._set_login_status("自動検出は 0 台です。接続済みの FX6 は IP を入力し「IP を確認」で指定できます。", "warn")
         self._refresh_backend_runtime()
+
+    def probe_camera_ip(self) -> None:
+        address = self.ip_input.text().strip()
+        if not address:
+            self._set_login_status("FX6 に表示されている IP アドレスを入力してください。", "warn")
+            return
+        if not self.backend_ready:
+            self._ensure_backend_started()
+            if not self.backend_ready:
+                return
+        self.ip_probe_button.setEnabled(False)
+        self.ip_probe_button.setText("確認中...")
+        self._set_login_status("指定 IP の認証用指紋を確認しています...", "info")
+        QApplication.processEvents()
+        try:
+            camera = self.api.post("/api/cameras/ip", {"ipAddress": address})
+        except ApiError as exc:
+            # Do not leave an old direct target selected after a failed probe.
+            self.camera_combo.setCurrentIndex(-1)
+            self.fingerprint_label.setText("—")
+            self._set_login_status(f"IP 確認失敗: {exc}", "error")
+            return
+        finally:
+            self.ip_probe_button.setEnabled(True)
+            self.ip_probe_button.setText("IP を確認")
+        self.current_camera_map = {camera["id"]: camera}
+        self.camera_combo.clear()
+        self.camera_combo.addItem(f"FX6 — {camera['ipAddress']} (IP 指定)", camera["id"])
+        self._update_fingerprint_label()
+        self._set_login_status(
+            "指紋を取得しました。FX6 本体の指紋と一致することを確認し、User / Password を入力して接続してください。認証はまだ行っていません。", "ok")
 
     def _update_fingerprint_label(self) -> None:
         camera_id = self.camera_combo.currentData()
@@ -496,6 +540,7 @@ class MainWindow(QMainWindow):
                     "cameraId": camera_id,
                     "userId": self.user_input.text(),
                     "password": self.password_input.text(),
+                    "fingerprint": self.current_camera_map.get(camera_id, {}).get("fingerprint", ""),
                 },
             )
         except ApiError as exc:
@@ -581,7 +626,7 @@ class MainWindow(QMainWindow):
         iris = state.get("iris", {})
         iso = state.get("iso", {})
         nd_filter = state.get("ndFilter", {})
-        nd_density = state.get("ndOpticalDensity", {})
+        nd_density = state.get("ndValue", state.get("ndOpticalDensity", {}))
 
         self.card_iris.set_value(iris.get("label", "—"), "i + u/d")
         self.card_iso.set_value(iso.get("label", "—"), "g + u/d")

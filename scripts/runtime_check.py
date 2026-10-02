@@ -112,8 +112,6 @@ try:
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(0.2)
-    results.append({'check': 'FX6 physical camera login/exposure/hardware keyboard operation', 'status': 'NOT RUN',
-                    'detail': 'No physical camera credentials/operation were used. Qt tests use an injected API.'})
     if all(r.get('camera_count', 0) == 0 for r in results):
         results.append({'check': 'camera discovery', 'status': 'WARN', 'detail': 'HTTP and SDK enumeration ran; zero cameras discovered.'})
 except Exception as exc:
