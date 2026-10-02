@@ -10,6 +10,7 @@
 #include "logger.h"
 #include "nd_state_machine.h"
 #include "nd_controller.h"
+#include "awb_controller.h"
 
 #include "CameraRemote_SDK.h"
 #include "IDeviceCallback.h"
@@ -47,6 +48,10 @@ struct StateSnapshot {
     PropertyView iso;
     PropertyView shutter_speed;
     PropertyView shutter_mode;
+    PropertyView white_balance_mode;
+    PropertyView color_temperature;
+    PropertyView awb_button;
+    AwbProgress awb;
     PropertyView iso_base;
     PropertyView gain_unit;
     PropertyView nd_filter;
@@ -72,6 +77,7 @@ public:
     bool step_iris(int delta, std::string& error);
     bool step_iso(int delta, std::string& error);
     bool step_shutter(int delta, std::string& error);
+    bool run_awb(std::string& error);
     bool toggle_iso_base(std::string& error);
     bool set_iso_base(bool high, std::string& error);
     bool set_nd(bool enabled, std::string& error);
@@ -128,6 +134,8 @@ private:
     std::string connected_camera_name_;
     std::string last_error_;
     std::mutex error_mutex_;
+    std::mutex awb_mutex_;
+    AwbProgress awb_progress_;
 
     std::mutex event_mutex_;
     std::promise<void>* event_promise_ = nullptr;

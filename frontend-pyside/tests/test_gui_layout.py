@@ -86,6 +86,8 @@ class GuiLayoutTest(unittest.TestCase):
             "cameraId": "AA:BB:CC:DD:EE:FF", "logPath": long_path + ".log",
             "iris": {"label": "F4.0"}, "iso": {"label": "ISO 12800"},
             "shutterSpeed": {"label": "1/59.94 s"}, "shutterMode": {"label": "Speed"},
+            "whiteBalanceMode": {"label": "Manual"}, "colorTemperature": {"label": "15000 K"},
+            "awb": {"status": "unconfirmed", "message": "AWB の結果通知を確認できません。カメラ本体の結果を確認してください。"},
             "ndFilter": {"label": "ON"}, "ndOpticalDensity": {"label": "1/~128 (OD 2.1)"}})
         self.window.stack.setCurrentWidget(self.window.operation_page)
         for width, height in self.SIZES:

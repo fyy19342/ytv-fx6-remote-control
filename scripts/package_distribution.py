@@ -49,6 +49,9 @@ subprocess.run(['bash', root / 'scripts/verify_app_bundle.sh', app], check=True)
 verification = stage / 'verification'
 verification.mkdir()
 public_report = json.loads(json.dumps(report).replace(str(root), '$WORKSPACE').replace(str(pathlib.Path.home()), '$HOME'))
+for result in public_report['results']:
+    # Keep the verified PID in health; raw lsof output includes the local account name.
+    result.pop('listener', None)
 (verification / 'results.json').write_text(json.dumps(public_report, ensure_ascii=False, indent=2) + '\n')
 manifest = f'''# Distribution manifest {build_id}
 

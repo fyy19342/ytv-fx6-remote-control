@@ -102,6 +102,11 @@ std::string state_to_json(const StateSnapshot& state) {
         << "\"iso\":" << property_to_json(state.iso) << ','
         << "\"shutterSpeed\":" << property_to_json(state.shutter_speed) << ','
         << "\"shutterMode\":" << property_to_json(state.shutter_mode) << ','
+        << "\"whiteBalanceMode\":" << property_to_json(state.white_balance_mode) << ','
+        << "\"colorTemperature\":" << property_to_json(state.color_temperature) << ','
+        << "\"awbButton\":" << property_to_json(state.awb_button) << ','
+        << "\"awb\":{\"status\":" << json_util::quote(state.awb.status)
+        << ",\"message\":" << json_util::quote(state.awb.message) << "},"
         << "\"isoBase\":" << property_to_json(state.iso_base) << ','
         << "\"gainUnit\":" << property_to_json(state.gain_unit) << ','
         << "\"ndFilter\":" << property_to_json(state.nd_filter) << ','
@@ -226,6 +231,16 @@ int main(int argc, char** argv) {
     server.Post("/api/shutter/step", [&](const httplib::Request& req, httplib::Response& res) {
         std::string error;
         if (!service.step_shutter(parse_int_param(req, "delta", 0), error)) {
+            res.status = 400;
+            res.set_content(error_response(error), "application/json; charset=utf-8");
+            return;
+        }
+        res.set_content(success_response(state_to_json(service.get_state())), "application/json; charset=utf-8");
+    });
+
+    server.Post("/api/white-balance/awb", [&](const httplib::Request&, httplib::Response& res) {
+        std::string error;
+        if (!service.run_awb(error)) {
             res.status = 400;
             res.set_content(error_response(error), "application/json; charset=utf-8");
             return;

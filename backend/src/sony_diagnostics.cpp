@@ -19,6 +19,9 @@ std::string sdk_property_name(SCRSDK::CrDevicePropertyCode code) {
     case SCRSDK::CrDeviceProperty_IsoSensitivity: return "IsoSensitivity";
     case SCRSDK::CrDeviceProperty_ShutterSpeedValue: return "ShutterSpeedValue";
     case SCRSDK::CrDeviceProperty_ShutterModeStatus: return "ShutterModeStatus";
+    case SCRSDK::CrDeviceProperty_WhiteBalanceModeSetting: return "WhiteBalanceModeSetting";
+    case SCRSDK::CrDeviceProperty_Colortemp: return "Colortemp";
+    case SCRSDK::CrDeviceProperty_AWB: return "AWB";
     case SCRSDK::CrDeviceProperty_GainUnitSetting: return "GainUnitSetting";
     case SCRSDK::CrDeviceProperty_GainBaseIsoSensitivity: return "GainBaseIsoSensitivity";
     case SCRSDK::CrDeviceProperty_NDFilter: return "NDFilter";

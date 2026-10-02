@@ -23,6 +23,11 @@
 
 namespace {
 
+int64_t monotonic_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 std::string sdk_error_to_string(SCRSDK::CrError err) {
     if (err == SCRSDK::CrError_None) return "CrError_None";
     return sdk_error_name(err) + " (0x" + [] (SCRSDK::CrError value) {
@@ -359,6 +364,7 @@ bool Fx6SdkService::connect_camera(const std::string& camera_id, const std::stri
         return false;
     }
 
+    { std::lock_guard<std::mutex> lock(awb_mutex_); awb_progress_ = {}; }
     connected_camera_id_ = camera_id;
     connected_camera_model_ = selected->GetModel() ? std::string(selected->GetModel()) : "";
     connected_camera_name_ = selected->GetName() ? std::string(selected->GetName()) : connected_camera_model_;
@@ -591,6 +597,13 @@ std::string Fx6SdkService::label_for_property(uint32_t code, uint64_t raw) const
         case SCRSDK::CrShutterModeStatus_Auto: return "Auto";
         default: return "—";
         }
+    case SCRSDK::CrDeviceProperty_WhiteBalanceModeSetting:
+        return raw == SCRSDK::CrWhiteBalanceModeSetting_Manual ? "Manual" :
+            raw == SCRSDK::CrWhiteBalanceModeSetting_Automatic ? "ATW" : "—";
+    case SCRSDK::CrDeviceProperty_Colortemp:
+        return raw == 0 || raw >= 0xffff ? "—" : std::to_string(raw) + " K";
+    case SCRSDK::CrDeviceProperty_AWB:
+        return raw == SCRSDK::CrAWB_Up ? "Released" : raw == SCRSDK::CrAWB_Down ? "Pressed" : "—";
     case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity:
         return raw == SCRSDK::CrGainBaseIsoSensitivity_High ? "High" : raw == SCRSDK::CrGainBaseIsoSensitivity_Low ? "Low" : std::to_string(raw);
     case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting:
@@ -632,12 +645,21 @@ StateSnapshot Fx6SdkService::get_state() {
         snapshot.last_error = last_error_;
     }
     snapshot.log_path = logger_.path();
+    {
+        std::lock_guard<std::mutex> lock(awb_mutex_);
+        awb_progress_.expire(monotonic_ms());
+        if (!connected_) awb_progress_.disconnect();
+        snapshot.awb = awb_progress_;
+    }
     if (!connected_) return snapshot;
 
     snapshot.iris = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_FNumber);
     snapshot.iso = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity);
     snapshot.shutter_speed = read_property_view_locked(SCRSDK::CrDeviceProperty_ShutterSpeedValue);
     snapshot.shutter_mode = read_property_view_locked(SCRSDK::CrDeviceProperty_ShutterModeStatus);
+    snapshot.white_balance_mode = read_property_view_locked(SCRSDK::CrDeviceProperty_WhiteBalanceModeSetting);
+    snapshot.color_temperature = read_property_view_locked(SCRSDK::CrDeviceProperty_Colortemp);
+    snapshot.awb_button = read_property_view_locked(SCRSDK::CrDeviceProperty_AWB);
     snapshot.iso_base = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity);
     snapshot.gain_unit = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting);
     snapshot.nd_filter = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilter);
@@ -702,6 +724,52 @@ bool Fx6SdkService::step_shutter(int delta, std::string& error) {
     if (!ok) { set_last_error(error); logger_.error(error); }
     else set_last_error("");
     return ok;
+}
+
+bool Fx6SdkService::run_awb(std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!connected_) { error = "Camera is not connected."; return false; }
+    {
+        std::lock_guard<std::mutex> state_lock(awb_mutex_);
+        if (!awb_progress_.begin(monotonic_ms())) {
+            error = "AWB is already running. Wait for its result.";
+            return false;
+        }
+    }
+    set_last_error("");
+    SCRSDK::CrDeviceProperty button_descriptor;
+    AwbController controller([&](AwbProperty p) {
+        if (p == AwbProperty::Mode) {
+            const auto view = read_property_view_locked(SCRSDK::CrDeviceProperty_WhiteBalanceModeSetting);
+            return AwbReading{view.supported, view.writable, view.raw, view.possible};
+        }
+        if (get_property_locked(SCRSDK::CrDeviceProperty_AWB, button_descriptor) != SCRSDK::CrError_None)
+            return AwbReading{};
+        return AwbReading{button_descriptor.IsGetEnableCurrentValue(), button_descriptor.IsSetEnableCurrentValue(),
+                          button_descriptor.GetCurrentValue(), extract_possible_values(button_descriptor)};
+    }, [&](AwbProperty p, uint64_t value, std::string& reason) {
+        if (p == AwbProperty::Mode)
+            return set_property_locked(SCRSDK::CrDeviceProperty_WhiteBalanceModeSetting, value, reason, true);
+        // Keep the validated descriptor for Up: a new property query during
+        // measurement must not prevent release of the button we just pressed.
+        button_descriptor.SetCurrentValue(value);
+        const auto result = SCRSDK::SetDeviceProperty(device_handle_, &button_descriptor);
+        if (result != SCRSDK::CrError_None) {
+            reason = "AWB: " + sdk_error_to_string(result);
+            return false;
+        }
+        logger_.info(value == SCRSDK::CrAWB_Down ? "AWB Down sent" : "AWB Up sent");
+        return true;
+    }, [] { std::this_thread::sleep_for(std::chrono::milliseconds(100)); },
+        SCRSDK::CrWhiteBalanceModeSetting_Manual, SCRSDK::CrAWB_Up, SCRSDK::CrAWB_Down);
+    bool ok = controller.trigger(error);
+    {
+        std::lock_guard<std::mutex> state_lock(awb_mutex_);
+        if (!ok) awb_progress_.fail(error);
+        else if (awb_progress_.status == "failed") { error = awb_progress_.message; ok = false; }
+    }
+    if (!ok) { set_last_error(error); logger_.error(error); }
+    return ok; // Accepted is not completion; /api/state carries the SDK result.
 }
 
 bool Fx6SdkService::toggle_iso_base(std::string& error) {
@@ -804,6 +872,7 @@ void Fx6SdkService::Callback::OnError(CrInt32u error) {
 
 void Fx6SdkService::Callback::OnDisconnected(CrInt32u error) {
     owner_.connected_ = false;
+    { std::lock_guard<std::mutex> lock(owner_.awb_mutex_); owner_.awb_progress_.disconnect(); }
     const std::string message = std::string("Callback: OnDisconnected -> ") + sdk_error_to_string(error);
     owner_.logger_.warn(message);
     std::lock_guard<std::mutex> lock(owner_.event_mutex_);
@@ -827,6 +896,24 @@ void Fx6SdkService::Callback::OnWarning(CrInt32u warning) {
 
 void Fx6SdkService::Callback::OnWarningExt(CrInt32u warning, CrInt32 param1, CrInt32 param2, CrInt32 param3) {
     owner_.logger_.warn(std::string("Callback: OnWarningExt -> ") + sdk_warning_text(warning, param1, param2, param3));
+    if ((warning != SCRSDK::CrWarningExt_OperationResults && warning != SCRSDK::CrWarningExt_OperationInvalid) ||
+        param1 != SCRSDK::CrSdkApi_SetDeviceProperty || param2 != SCRSDK::CrDeviceProperty_AWB) return;
+    std::string message;
+    const bool ok = param3 == SCRSDK::CrWarningExt_OperationResultsParam_OK;
+    switch (param3) {
+    case SCRSDK::CrWarningExt_OperationResultsParam_OK: message = "AWB 完了（カメラの結果通知を確認）。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_LowBrightnessError: message = "AWB 失敗: 被写体が暗すぎます。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_HighBrightnessError: message = "AWB 失敗: 被写体が明るすぎます。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_ColorTempHighError: message = "AWB 失敗: 色温度が高すぎます。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_ColorTempLowError: message = "AWB 失敗: 色温度が低すぎます。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_TintOutOfRangeError: message = "AWB 失敗: 色かぶりが調整範囲外です。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_PoorWhiteAreaError: message = "AWB 失敗: 白い領域が不足しています。"; break;
+    case SCRSDK::CrWarningExt_OperationResultsParam_ExecuteCanceled: message = "AWB はカメラでキャンセルされました。"; break;
+    default: message = "AWB 失敗: カメラの状態と WB メモリー A/B を確認してください (" + std::to_string(param3) + ")。"; break;
+    }
+    std::lock_guard<std::mutex> state_lock(owner_.awb_mutex_);
+    owner_.awb_progress_.expire(monotonic_ms());
+    owner_.awb_progress_.notify(ok, message);
 }
 
 void Fx6SdkService::Callback::OnPropertyChangedCodes(CrInt32u num, CrInt32u* codes) {

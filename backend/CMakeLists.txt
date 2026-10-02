@@ -111,9 +111,12 @@ add_test(NAME network_target_test COMMAND network_target_test)
 add_executable(shutter_controller_test tests/shutter_controller_test.cpp)
 target_include_directories(shutter_controller_test PRIVATE src)
 add_test(NAME shutter_controller_test COMMAND shutter_controller_test)
+add_executable(awb_controller_test tests/awb_controller_test.cpp)
+target_include_directories(awb_controller_test PRIVATE src)
+add_test(NAME awb_controller_test COMMAND awb_controller_test)
 
 # These tests use assert; keep the assertions active in Release builds too.
-foreach(test_target nd_state_machine_test nd_controller_test exposure_steps_test network_target_test shutter_controller_test)
+foreach(test_target nd_state_machine_test nd_controller_test exposure_steps_test network_target_test shutter_controller_test awb_controller_test)
   if(MSVC)
     target_compile_options(${test_target} PRIVATE /UNDEBUG)
   else()

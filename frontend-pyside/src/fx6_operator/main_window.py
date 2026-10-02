@@ -30,13 +30,13 @@ try:
     from .api import ApiClient, ApiError
     from .backend_process import BackendProcess
     from .build_info import load_build_info
-    from .keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, step_command
+    from .keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, ACTION_KEYS, step_command
     from .usage_terms import USAGE_NOTICE_HTML, CONSENT_LABEL
 except ImportError:
     from api import ApiClient, ApiError  # type: ignore
     from backend_process import BackendProcess  # type: ignore
     from build_info import load_build_info  # type: ignore
-    from keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, step_command  # type: ignore
+    from keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, ACTION_KEYS, step_command  # type: ignore
     from usage_terms import USAGE_NOTICE_HTML, CONSENT_LABEL  # type: ignore
 
 
@@ -400,6 +400,10 @@ class MainWindow(QMainWindow):
         self.control_feedback = QLabel("i / g / n / s で操作モードを選択してください。")
         self.control_feedback.setWordWrap(True)
         self.control_feedback.setStyleSheet("color:#9cb2cf;")
+        self.awb_running = False
+        self.white_balance_label = QLabel("White Balance: — / a: AWB を1回実行")
+        self.white_balance_label.setWordWrap(True)
+        self.white_balance_label.setStyleSheet("color:#d7e4f7;font-size:14px;")
 
         footer = QHBoxLayout()
         self.log_path_label = QLabel("Log: —")
@@ -422,7 +426,8 @@ class MainWindow(QMainWindow):
             "モード  i: Iris   g: Gain (ISO)   n: ND   s: Shutter Speed\n"
             "調整  u: 明るく   d: 暗く  (選択モードを1段ずつ)\n"
             "ND     b: ON/OFF 切替 (ON 時は最小濃度)   m: OFF\n"
-            "Shutter  u: 遅く   d: 速く (調整時は手動 Speed に切替)"
+            "Shutter  u: 遅く   d: 速く (調整時は手動 Speed に切替)\n"
+            "WB     a: AWB を1回実行 (本体の WB メモリー A/B・白い被写体を使用)"
         )
         guide.setStyleSheet("background:#172030;color:#d7e4f7;padding:16px;border-radius:12px;")
         guide.setWordWrap(True)
@@ -430,6 +435,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(header)
         layout.addWidget(self.mode_label)
         layout.addLayout(grid)
+        layout.addWidget(self.white_balance_label)
         layout.addWidget(guide)
         layout.addWidget(self.control_feedback)
         layout.addLayout(footer)
@@ -438,7 +444,7 @@ class MainWindow(QMainWindow):
         page = self._scroll_page(root)
         page.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.shortcuts: list[QShortcut] = []
-        for key in (*MODE_KEYS, "u", "d", *ND_KEYS):
+        for key in (*MODE_KEYS, "u", "d", *ND_KEYS, *ACTION_KEYS):
             shortcut = QShortcut(QKeySequence(key.upper()), page)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.setAutoRepeat(False)
@@ -588,6 +594,12 @@ class MainWindow(QMainWindow):
         elif key in ND_KEYS:
             path = ND_KEYS[key]
             params = {}
+        elif key in ACTION_KEYS:
+            if self.awb_running:
+                self._set_control_feedback("AWB の結果確認中です。再実行は少しお待ちください。")
+                return
+            path = ACTION_KEYS[key]
+            params = {}
         else:
             return
 
@@ -599,7 +611,9 @@ class MainWindow(QMainWindow):
             return
 
         self._render_state(state)
-        if key == "b" and self.nd_on:
+        if key == "a":
+            self._set_control_feedback("AWB の指示を送信しました。結果は White Balance 欄をご確認ください。")
+        elif key == "b" and self.nd_on:
             self._set_control_feedback("ND を ON にし、最も明るい濃度にしました。")
         elif key in ("b", "m") and state.get("ndFilter", {}).get("label") == "OFF":
             self._set_control_feedback("ND を OFF にしました。")
@@ -632,6 +646,14 @@ class MainWindow(QMainWindow):
         iso = state.get("iso", {})
         shutter = state.get("shutterSpeed", {})
         shutter_mode = state.get("shutterMode", {}).get("label", "—")
+        wb_mode = state.get("whiteBalanceMode", {}).get("label", "—")
+        temperature = state.get("colorTemperature", {}).get("label", "—")
+        awb = state.get("awb", {})
+        self.awb_running = connected and awb.get("status") == "running"
+        wb_message = awb.get("message") or "a: AWB を1回実行"
+        self.white_balance_label.setText(f"White Balance: {temperature} / {wb_mode} — {wb_message}")
+        wb_color = {"failed": "#fca5a5", "unconfirmed": "#fbbf24"}.get(awb.get("status"), "#d7e4f7")
+        self.white_balance_label.setStyleSheet(f"color:{wb_color};font-size:14px;")
         nd_filter = state.get("ndFilter", {})
         nd_density = state.get("ndValue", state.get("ndOpticalDensity", {}))
 

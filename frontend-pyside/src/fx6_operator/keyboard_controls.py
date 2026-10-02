@@ -33,3 +33,4 @@ def step_command(mode: ControlMode, key: str) -> tuple[str, int]:
 
 
 ND_KEYS = {"b": "/api/nd/toggle", "m": "/api/nd/off"}
+ACTION_KEYS = {"a": "/api/white-balance/awb"}

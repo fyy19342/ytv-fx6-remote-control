@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from fx6_operator.keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, step_command
+from fx6_operator.keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, ACTION_KEYS, step_command
 
 
 class KeyboardControlsTest(unittest.TestCase):
@@ -24,6 +24,9 @@ class KeyboardControlsTest(unittest.TestCase):
 
     def test_nd_keys(self) -> None:
         self.assertEqual(ND_KEYS, {"b": "/api/nd/toggle", "m": "/api/nd/off"})
+
+    def test_awb_action_key(self) -> None:
+        self.assertEqual(ACTION_KEYS, {"a": "/api/white-balance/awb"})
 
 
 if __name__ == "__main__":

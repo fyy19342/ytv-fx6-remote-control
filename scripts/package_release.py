@@ -58,7 +58,7 @@ manifest = f'''# RELEASE MANIFEST {build_id}
 - Host: macOS {platform.mac_ver()[0]} / {platform.machine()}
 - Python / PySide6 / PyInstaller: {packages}
 - Signature: ad-hoc, not notarized
-- GUI controls: i / g / n / s / u / d / b / m; b toggles ND, s selects Shutter Speed; Gain (ISO) is ISO sensitivity
+- GUI controls: i / g / n / s / u / d / b / m / a; a triggers one-shot AWB; b toggles ND, s selects Shutter Speed; Gain (ISO) is ISO sensitivity
 - Source input digest: {verification['fingerprints']['inputs_sha256']}
 - Verified artifacts digest: {verification['fingerprints']['artifacts_sha256']}
 

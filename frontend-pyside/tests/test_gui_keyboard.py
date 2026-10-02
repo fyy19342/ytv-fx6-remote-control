@@ -20,6 +20,8 @@ class FakeApi:
         self.state = {"connected": True, "cameraModel": "FX6 test double",
                       "iris": {"label": "F4"}, "iso": {"label": "ISO 800"},
                       "shutterSpeed": {"label": "1/60 s"}, "shutterMode": {"label": "Speed"},
+                      "whiteBalanceMode": {"label": "Manual"}, "colorTemperature": {"label": "5600 K"},
+                      "awb": {"status": "idle", "message": ""},
                       "ndFilter": {"label": "OFF"}, "ndOpticalDensity": {"label": "1/~4 (OD 0.6)"}}
 
     def get(self, path):
@@ -33,6 +35,8 @@ class FakeApi:
         if path == "/api/nd/toggle":
             self.state["ndFilter"] = {"label": "OFF" if self.state["ndFilter"]["label"] == "ON" else "ON"}
         if path == "/api/nd/off": self.state["ndFilter"] = {"label": "OFF"}
+        if path == "/api/white-balance/awb":
+            self.state["awb"] = {"status": "running", "message": "AWB 実行中"}
         return self.state.copy()
 
 
@@ -76,8 +80,8 @@ class GuiKeyboardTest(unittest.TestCase):
     def test_login_text_is_not_a_camera_command(self):
         self.window.user_input.setText("")
         self.window.user_input.setFocus()
-        self.key("ignsudbm", self.window.user_input)
-        self.assertEqual(self.window.user_input.text(), "ignsudbm")
+        self.key("ignsudbma", self.window.user_input)
+        self.assertEqual(self.window.user_input.text(), "ignsudbma")
         self.assertEqual(self.api.calls, [])
         self.assertIsNone(self.window.control_mode)
 
@@ -177,6 +181,35 @@ class GuiKeyboardTest(unittest.TestCase):
         self.window._render_state(state)
         self.assertEqual(self.window.card_nd.value_label.text(), "1/4.8")
 
+    def test_awb_action_preserves_mode_blocks_reentry_and_renders_result(self):
+        self.operation()
+        self.key("sa")
+        self.assertEqual(self.api.calls, [("/api/white-balance/awb", {})])
+        self.assertEqual(self.window.control_mode, ControlMode.SHUTTER)
+        self.assertIn("実行中", self.window.white_balance_label.text())
+        self.assertNotIn("完了", self.window.white_balance_label.text())
+        self.key("aa")
+        self.assertEqual(len(self.api.calls), 1)
+        for status, message in [("completed", "AWB 完了"), ("failed", "白い領域が不足"),
+                                ("unconfirmed", "結果を確認できません")]:
+            self.api.state["awb"] = {"status": status, "message": message}
+            self.window.refresh_state()
+            self.assertIn(message, self.window.white_balance_label.text())
+            self.assertFalse(self.window.awb_running)
+        self.key("a")
+        self.assertEqual(len(self.api.calls), 2)
+
+    def test_awb_needs_no_exposure_mode_and_no_auto_repeat(self):
+        self.operation()
+        self.window.disconnect_button.setFocus()
+        QTest.keyClick(self.window.disconnect_button, Qt.Key_A, Qt.ControlModifier)
+        self.app.sendEvent(self.window.disconnect_button,
+                           QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.NoModifier, "a", True, 2))
+        self.assertEqual(self.api.calls, [])
+        self.key("a", self.window.disconnect_button)
+        self.assertIsNone(self.window.control_mode)
+        self.assertEqual(self.api.calls, [("/api/white-balance/awb", {})])
+
     def test_child_button_focus_and_no_repeat_or_modifiers(self):
         self.operation()
         self.window.disconnect_button.setFocus()
@@ -195,7 +228,7 @@ class GuiKeyboardTest(unittest.TestCase):
         other.setFocus()
         QTest.qWait(40)
         self.assertFalse(self.window.isActiveWindow())
-        self.key("isubm", other)
+        self.key("isubma", other)
         self.assertEqual(self.api.calls, [])
         other.close()
         self.window.activateWindow()
@@ -204,14 +237,14 @@ class GuiKeyboardTest(unittest.TestCase):
         dialog.setModal(True)
         dialog.show()
         QTest.qWait(40)
-        self.key("isubm", dialog)
+        self.key("isubma", dialog)
         self.assertEqual(self.api.calls, [])
         dialog.close()
         self.window.activateWindow()
         self.window.operation_page.setFocus()
         QTest.qWait(40)
         self.window._render_state({"connected": False})
-        self.key("isubm")
+        self.key("isubma")
         self.assertEqual(self.api.calls, [])
 
     def test_nd_failure_shows_reason_and_refreshes_off_state(self):
