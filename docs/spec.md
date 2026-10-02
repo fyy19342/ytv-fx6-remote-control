@@ -1,6 +1,6 @@
-# 現行仕様 — 20261002e / 0.4.7
+# 現行仕様 — 20261002f / 0.4.8
 
-操作は [KEYBOARD_CONTROLS](KEYBOARD_CONTROLS.md) を正本とします。GUI はログイン、検出、接続・切断、Iris / Gain (ISO) / Shutter Speed / ND / Camera / Backend のカード、選択モード、White Balance の色温度・状態、操作結果、終了ボタンを提供します。
+操作は [KEYBOARD_CONTROLS](KEYBOARD_CONTROLS.md) を正本とします。GUI はログイン、検出、接続・切断、Iris / Gain (ISO) / Shutter Speed / ND の4枚のカード、選択モード、White Balance の色温度・状態、操作結果、終了ボタンを提供します。操作画面は800×480を標準・最小サイズとし、カメラ名はヘッダー、backend 情報はフッターへ表示します。詳しいキー説明は「キー操作」で開閉できます。
 
 QShortcut は操作ページ配下の WidgetWithChildrenShortcut とし、接続状態・active window・modal window を確認します。ログイン直後はモード未選択です。状態を1秒ごとに取得し、通信失敗時は次の状態確認までカメラ操作を抑止します。
 

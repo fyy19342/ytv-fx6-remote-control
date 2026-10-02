@@ -1,4 +1,4 @@
-# SDK notes — 20261002e
+# SDK notes — 20261002f
 
 照合元はローカルの Sony Camera Remote SDK 2.01.00 HTML reference、機種別 Function List、および実機が返す property の有効値・書き込み可否です。incoming と SDK headers/runtime は GitHub のソースへ含めません。
 

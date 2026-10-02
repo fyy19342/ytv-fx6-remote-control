@@ -15,6 +15,7 @@ from fx6_operator.main_window import MainWindow
 
 class GuiLayoutTest(unittest.TestCase):
     SIZES = ((800, 600), (1040, 800), (1280, 900))
+    OPERATION_SIZES = ((800, 480), (900, 600), (1040, 800))
 
     @classmethod
     def setUpClass(cls):
@@ -87,25 +88,40 @@ class GuiLayoutTest(unittest.TestCase):
             "awb": {"status": "unconfirmed", "message": "AWB の結果通知を確認できません。カメラ本体の結果を確認してください。"},
             "ndFilter": {"label": "ON"}, "ndOpticalDensity": {"label": "1/~128 (OD 2.1)"}})
         self.window.stack.setCurrentWidget(self.window.operation_page)
-        for width, height in self.SIZES:
+        self.window.setMinimumSize(800, 480)
+        for width, height in self.OPERATION_SIZES:
             with self.subTest(size=(width, height)):
                 self.window.resize(width, height)
                 QTest.qWait(30)
                 self.assertEqual(self.window.width(), width)
                 page = self.window.operation_page
-                cards = (self.window.card_iris, self.window.card_iso, self.window.card_shutter, self.window.card_nd,
-                         self.window.card_camera, self.window.card_backend)
+                cards = (self.window.card_iris, self.window.card_iso, self.window.card_shutter, self.window.card_nd)
                 for card in cards:
                     point = card.mapTo(page.widget(), QPoint(0, 0))
                     self.assertLessEqual(point.x() + card.width(), page.viewport().width())
                     for label in (card.title_label, card.value_label, card.note_label):
                         self.assertEqual(label.frameWidth(), 0, "Card borders must not apply to labels")
+                        required_height = label.heightForWidth(label.width()) if label.hasHeightForWidth() else label.sizeHint().height()
+                        self.assertGreaterEqual(label.height(), required_height, "Wrapped card text must not be clipped")
                 self.assertLessEqual(abs(cards[0].width() - cards[1].width()), 1)
-                for button in (self.window.disconnect_button, self.window.quit_button):
+                self.assertEqual(len({card.y() for card in cards}), 1, "All exposure cards must share one row")
+                for button in (self.window.guide_button, self.window.disconnect_button, self.window.quit_button):
                     self.button_text_fits(button)
-                self.assertEqual(self.window.card_backend.toolTip(), long_path)
+                    point = button.mapTo(page.viewport(), QPoint(0, 0))
+                    self.assertLessEqual(point.y() + button.height(), page.viewport().height())
+                self.assertEqual(self.window.backend_label.toolTip(), long_path)
+                self.assertEqual(self.window.log_path_label.toolTip(), long_path + ".log")
                 page.verticalScrollBar().setValue(0)
                 self.capture(f"operation-{width}x{height}")
+                self.assertEqual(page.verticalScrollBar().maximum(), 0, "Compact controls and AWB status must fit without scrolling")
+                self.window.guide_button.click()
+                self.app.processEvents()
+                self.assertTrue(self.window.keyboard_guide.isVisible())
+                page.ensureWidgetVisible(self.window.quit_button)
+                self.capture(f"operation-guide-{width}x{height}")
+                self.assertEqual(self.window.width(), width, "Expanded help must not force the window wider")
+                self.window.guide_button.click()
+                self.app.processEvents()
 
 
 if __name__ == "__main__":

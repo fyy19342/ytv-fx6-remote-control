@@ -1,15 +1,17 @@
-# インストール — 20261002e
+# インストール — 20261002f
 
 この配布物は Apple Silicon (arm64) 用です。同梱ライブラリの最低条件に合わせ、macOS 15 以降が必要です。Intel Mac は対象外です。実際に起動を検証した環境は macOS 26.5.1 / arm64 です。
 
-1. [利用条件](TERMS.md) を確認し、同意する場合に [Release](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.7-20261002e) から `FX6OperationApp-20261002e-macos-arm64.zip` と同名の `.zip.sha256` を同じフォルダへダウンロードします。
-2. ターミナルでダウンロード先へ移動し、`shasum -a 256 -c FX6OperationApp-20261002e-macos-arm64.zip.sha256` が `OK` になることを確認します。
+1. [利用条件](TERMS.md) を確認し、同意する場合に [Release](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.8-20261002f) から `FX6OperationApp-20261002f-macos-arm64.zip` と同名の `.zip.sha256` を同じフォルダへダウンロードします。
+2. ターミナルでダウンロード先へ移動し、`shasum -a 256 -c FX6OperationApp-20261002f-macos-arm64.zip.sha256` が `OK` になることを確認します。
 3. 古い app と backend を終了します。必要なら `lsof -nP -iTCP:39061 -sTCP:LISTEN` で占有プロセスを確認します。
 4. zip を展開し `FX6OperationApp.app` を Applications または任意の書込み可能なフォルダへコピーします。source はアプリ起動には不要です。
 5. アプリを起動します。この評価版は ad-hoc 署名で Apple 公証は未実施です。macOS に拒否された場合は発行元と SHA256 を確認した上で「システム設定 → プライバシーとセキュリティ → このまま開く」を使用します。Gatekeeper 全体を無効にしないでください。
-6. タイトルと Runtime build が `20261002e` であることを確認します。カメラを選び、表示された Fingerprint を FX6 本体の Network → Access Authentication に表示される指紋と照合します。User / Password を入力して「接続」を押します。同意チェックの操作はありません。
+6. タイトルと Runtime build が `20261002f` であることを確認します。カメラを選び、表示された Fingerprint を FX6 本体の Network → Access Authentication に表示される指紋と照合します。User / Password を入力して「接続」を押します。同意チェックの操作はありません。
 
-ログイン画面の初期サイズは900×600で、説明・同意欄はありません。標準サイズで接続すると操作画面は1040×800に広がります。手動で変更したウィンドウサイズは維持します。最小サイズは800×600です。下部が見えない場合は縦にスクロールできます。Runtime build 表示にカーソルを置くと、起動元の backend パスを確認できます。20261001b で発生したフォームの縮み・文字切れは 20261001c 以降で修正しています。
+ログイン画面の初期サイズは900×600で、説明・同意欄はありません。標準サイズで接続すると操作画面は800×480に縮まり、切断すると900×600に戻ります。最小サイズはログイン画面800×600、操作画面800×480です。手動変更したサイズは各画面の最小サイズの範囲内で維持します。
+
+操作画面は Iris・Gain (ISO)・Shutter・ND の4項目を横1列に表示します。詳しい説明は「キー操作」ボタンで開閉できます。White Balance の状態と操作結果は常に表示します。下部が見えない場合は縦にスクロールできます。カメラ名、Backend、Log にカーソルを置くと接続先 ID やパスを確認できます。
 
 自動検出が0台でも Wi-Fi / LAN で IP が分かる場合は、「FX6 IP」に本体の IPv4 アドレスを入力し「IP を確認」を押します。指紋取得後に選択欄が「IP 指定」へ変わります。これは認証前の状態です。指紋を照合してからログインしてください。IP を確認しても接続できない場合は、macOS のローカルネットワーク許可と FX6 のリモート接続設定を確認します。ping 成功や health の `ok=true` は認証成功を意味しません。
 

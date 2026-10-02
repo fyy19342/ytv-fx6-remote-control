@@ -2,17 +2,17 @@
 
 [![CI](https://github.com/fyy19342/ytv-fx6-remote-control/actions/workflows/ci.yml/badge.svg)](https://github.com/fyy19342/ytv-fx6-remote-control/actions/workflows/ci.yml)
 
-Sony FX6 を Sony Camera Remote SDK 経由で操作する macOS アプリです。**0.4.7 / build 20261002e**。アプリにフォーカスがある間、ログイン後の操作画面でキーボード操作が有効になります。Gain は SDK の ISO sensitivity として扱い、GUI では **Gain (ISO)** と表示します。
+Sony FX6 を Sony Camera Remote SDK 経由で操作する macOS アプリです。**0.4.8 / build 20261002f**。アプリにフォーカスがある間、ログイン後の操作画面でキーボード操作が有効になります。Gain は SDK の ISO sensitivity として扱い、GUI では **Gain (ISO)** と表示します。
 
-0.4.7 はログイン画面の長い説明と同意チェックを削除し、コンパクトに整理します。A キーの AWB は3秒後に再実行できます。測定後は手動ホワイトバランスを維持します。B の ND ON/OFF 切り替えと、S → U/D のシャッタースピード操作も使用できます。
+0.4.8 は操作画面を800×480に縮小し、Iris・Gain (ISO)・Shutter・ND を横1列に表示します。詳しい説明は「キー操作」で開けます。ログイン画面の同意チェックはありません。A の AWB は3秒後に再実行でき、B の ND ON/OFF 切り替えと S → U/D のシャッタースピード操作も使用できます。
 
 ## ダウンロード
 
-[**GitHub Release — 0.4.7 / 20261002e**](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.7-20261002e) の `FX6OperationApp-20261002e-macos-arm64.zip` と `.zip.sha256` をダウンロードしてください。GitHub が自動生成する「Source code」にはアプリは入っていません。
+[**GitHub Release — 0.4.8 / 20261002f**](https://github.com/fyy19342/ytv-fx6-remote-control/releases/tag/v0.4.8-20261002f) の `FX6OperationApp-20261002f-macos-arm64.zip` と `.zip.sha256` をダウンロードしてください。GitHub が自動生成する「Source code」にはアプリは入っていません。
 
 [利用条件](docs/TERMS.md) に同意した場合にダウンロード・使用してください。Sony 公式アプリではありません。本アプリで使用・制御した機器のメーカー保証について Sony SDK 規約上の条件があります。
 
-Apple Silicon 向けの評価版です。Apple 公証は未実施です。実機の検出・認証・設定値の読み戻し・映像の変化は別々に判定し、確認済みの内容と制約を [SELF_CHECK](docs/SELF_CHECK_20261002e.md) に記載しています。インストール方法・対応 OS は [INSTALL](docs/INSTALL.md) を参照してください。
+Apple Silicon 向けの評価版です。Apple 公証は未実施です。実機の検出・認証・設定値の読み戻し・映像の変化は別々に判定し、確認済みの内容と制約を [SELF_CHECK](docs/SELF_CHECK_20261002f.md) に記載しています。インストール方法・対応 OS は [INSTALL](docs/INSTALL.md) を参照してください。
 
 このビルドで実施した試験と制約は SELF_CHECK を参照してください。キー入力、実機の読み戻し、白い基準被写体での測定精度は別々に判定します。
 

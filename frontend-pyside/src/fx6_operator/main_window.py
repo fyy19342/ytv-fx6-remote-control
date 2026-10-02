@@ -39,7 +39,7 @@ except ImportError:
 
 
 LOGIN_SIZE = (900, 600)
-OPERATION_SIZE = (1040, 800)
+OPERATION_SIZE = (800, 480)
 
 
 CARD_STYLE = """
@@ -54,7 +54,7 @@ QLabel#cardTitle {
 }
 QLabel#cardValue {
     color: white;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 700;
 }
 """
@@ -102,8 +102,8 @@ class MetricCard(QFrame):
         self.setObjectName("metricCard")
         self.setStyleSheet(CARD_STYLE)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(4)
 
         self.title_label = QLabel(title)
         self.title_label.setObjectName("cardTitle")
@@ -217,8 +217,8 @@ class MainWindow(QMainWindow):
         )
         self.login_backend_label.setText(f"Runtime build: {runtime_build}")
         self.login_backend_label.setToolTip(details)
-        self.card_backend.set_value(str(runtime_build), "バックエンド稼働中")
-        self.card_backend.setToolTip(details)
+        self.backend_label.setText(f"Backend: {runtime_build}")
+        self.backend_label.setToolTip(details)
         if runtime_build != self.build_info["build_id"] or (
             self.backend.selected_source == "launched-local-binary" and not self.backend.is_running()
         ):
@@ -345,50 +345,46 @@ class MainWindow(QMainWindow):
     def _build_operation_page(self) -> QWidget:
         root = QWidget()
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
 
         header = QHBoxLayout()
-        title = QLabel("Operation")
+        self.camera_label = QLabel("FX6")
         title_font = QFont()
-        title_font.setPointSize(24)
+        title_font.setPointSize(18)
         title_font.setBold(True)
-        title.setFont(title_font)
+        self.camera_label.setFont(title_font)
+        self.camera_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.camera_label.setWordWrap(True)
 
         self.connection_label = QLabel("Disconnected")
         self.connection_label.setStyleSheet("color:#f59e0b;font-weight:700;")
-        self.version_label = QLabel(f"Build {self.build_info['build_id']} / v{self.build_info['version']}")
+        self.version_label = QLabel(f"v{self.build_info['version']} / {self.build_info['build_id']}")
         self.version_label.setStyleSheet("color:#9aa6b2;font-weight:700;")
 
-        header.addWidget(title)
-        header.addStretch(1)
+        header.addWidget(self.camera_label, 1)
         header.addWidget(self.version_label)
         header.addWidget(self.connection_label)
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(16)
-        grid.setVerticalSpacing(16)
-        for column in range(3):
+        grid.setHorizontalSpacing(10)
+        for column in range(4):
             grid.setColumnStretch(column, 1)
 
         self.card_iris = MetricCard("Iris")
         self.card_iso = MetricCard("Gain (ISO)")
         self.card_shutter = MetricCard("Shutter Speed")
         self.card_nd = MetricCard("ND")
-        self.card_camera = MetricCard("Camera")
-        self.card_backend = MetricCard("Backend")
 
         grid.addWidget(self.card_iris, 0, 0)
         grid.addWidget(self.card_iso, 0, 1)
         grid.addWidget(self.card_shutter, 0, 2)
-        grid.addWidget(self.card_nd, 1, 0)
-        grid.addWidget(self.card_camera, 1, 1)
-        grid.addWidget(self.card_backend, 1, 2)
+        grid.addWidget(self.card_nd, 0, 3)
 
         self.mode_label = QLabel("操作モード: 未選択")
         self.mode_label.setStyleSheet(
             "background:#123154;color:#d8ecff;border:1px solid #2b5a8f;"
-            "padding:12px 16px;border-radius:12px;font-size:18px;font-weight:700;"
+            "padding:7px 10px;border-radius:8px;font-size:14px;font-weight:700;"
         )
         self.mode_label.setWordWrap(True)
         self.control_feedback = QLabel("i / g / n / s で操作モードを選択してください。")
@@ -401,11 +397,18 @@ class MainWindow(QMainWindow):
         self.white_balance_label.setStyleSheet("color:#d7e4f7;font-size:14px;")
 
         footer = QHBoxLayout()
-        self.log_path_label = QLabel("Log: —")
+        self.backend_label = QLabel("Backend: —")
+        self.backend_label.setStyleSheet("color:#9aa6b2;font-size:11px;")
+        self.log_path_label = QLabel("Log")
         self.log_path_label.setStyleSheet("color:#9aa6b2;")
-        self.log_path_label.setWordWrap(True)
-        self.log_path_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        footer.addWidget(self.log_path_label, 1)
+        footer.addWidget(self.backend_label)
+        footer.addWidget(self.log_path_label)
+        footer.addStretch(1)
+
+        self.guide_button = QPushButton("キー操作 ▸")
+        self.guide_button.setObjectName("secondaryButton")
+        self.guide_button.setCheckable(True)
+        self.guide_button.toggled.connect(self._toggle_keyboard_guide)
 
         self.disconnect_button = QPushButton("切断")
         self.disconnect_button.setObjectName("secondaryButton")
@@ -414,25 +417,31 @@ class MainWindow(QMainWindow):
         self.quit_button = QPushButton("終了")
         self.quit_button.setObjectName("dangerButton")
         self.quit_button.clicked.connect(self.quit_app)
-        footer.addWidget(self.disconnect_button)
-        footer.addWidget(self.quit_button)
+        for button in (self.guide_button, self.disconnect_button, self.quit_button):
+            button.setStyleSheet("padding:6px 10px;min-height:20px;font-size:12px;")
+            footer.addWidget(button)
 
-        guide = QLabel(
+        self.keyboard_guide = QLabel(
             "モード  i: Iris   g: Gain (ISO)   n: ND   s: Shutter Speed\n"
             "調整  u: 明るく   d: 暗く  (選択モードを1段ずつ)\n"
             "ND     b: ON/OFF 切替 (ON 時は最小濃度)   m: OFF\n"
             "Shutter  u: 遅く   d: 速く (調整時は手動 Speed に切替)\n"
             "WB     a: AWB を1回実行 (再実行は3秒後 / 本体の WB メモリー A/B・白い被写体を使用)"
         )
-        guide.setStyleSheet("background:#172030;color:#d7e4f7;padding:16px;border-radius:12px;")
-        guide.setWordWrap(True)
+        self.keyboard_guide.setStyleSheet("background:#172030;color:#d7e4f7;padding:10px;border-radius:8px;font-size:12px;")
+        self.keyboard_guide.setWordWrap(True)
+        self.keyboard_guide.setVisible(False)
+        quick_guide = QLabel("u: 明るく / d: 暗く　　b: ND切替　 m: ND OFF　 a: AWB（3秒間隔）")
+        quick_guide.setWordWrap(True)
+        quick_guide.setStyleSheet("color:#9cb2cf;font-size:12px;")
 
         layout.addLayout(header)
         layout.addWidget(self.mode_label)
         layout.addLayout(grid)
         layout.addWidget(self.white_balance_label)
-        layout.addWidget(guide)
+        layout.addWidget(quick_guide)
         layout.addWidget(self.control_feedback)
+        layout.addWidget(self.keyboard_guide)
         layout.addLayout(footer)
         layout.addStretch(1)
 
@@ -446,6 +455,10 @@ class MainWindow(QMainWindow):
             shortcut.activated.connect(lambda pressed=key: self._handle_hotkey(pressed))
             self.shortcuts.append(shortcut)
         return page
+
+    def _toggle_keyboard_guide(self, expanded: bool) -> None:
+        self.keyboard_guide.setVisible(expanded)
+        self.guide_button.setText("キー操作 ▾" if expanded else "キー操作 ▸")
 
     def refresh_camera_list(self) -> None:
         if not self.backend_ready:
@@ -555,6 +568,7 @@ class MainWindow(QMainWindow):
         self.control_mode = None
         self.mode_label.setText("操作モード: 未選択")
         self._set_control_feedback("i / g / n / s で操作モードを選択してください。")
+        self.setMinimumSize(*OPERATION_SIZE)
         self.stack.setCurrentWidget(self.operation_page)
         if (self.width(), self.height()) == LOGIN_SIZE:
             self.resize(*OPERATION_SIZE)
@@ -621,8 +635,10 @@ class MainWindow(QMainWindow):
             state = self.api.get("/api/state")
         except ApiError as exc:
             self.camera_connected = False
-            self.connection_label.setText(f"Error: {exc}")
+            self.connection_label.setText("Error")
+            self.connection_label.setToolTip(str(exc))
             self.connection_label.setStyleSheet("color:#fca5a5;font-weight:700;")
+            self._set_control_feedback(f"通信エラー: {exc}", error=True)
             return
 
         self._render_state(state)
@@ -632,6 +648,7 @@ class MainWindow(QMainWindow):
         connected = bool(state.get("connected"))
         self.camera_connected = connected
         self.connection_label.setText("Connected" if connected else "Disconnected")
+        self.connection_label.setToolTip("")
         self.connection_label.setStyleSheet(
             "color:#34d399;font-weight:700;" if connected else "color:#f59e0b;font-weight:700;"
         )
@@ -648,6 +665,7 @@ class MainWindow(QMainWindow):
         self.awb_retry_until = monotonic() + retry_ms / 1000
         wb_message = awb.get("message") or "a: AWB を1回実行"
         self.white_balance_label.setText(f"White Balance: {temperature} / {wb_mode} — {wb_message}")
+        self.white_balance_label.setToolTip("a: AWB を1回実行（再実行は3秒後）。本体の WB メモリー A/B と白い被写体を準備してください。")
         wb_color = {"failed": "#fca5a5", "unconfirmed": "#fbbf24"}.get(awb.get("status"), "#d7e4f7")
         self.white_balance_label.setStyleSheet(f"color:{wb_color};font-size:14px;")
         nd_filter = state.get("ndFilter", {})
@@ -656,17 +674,17 @@ class MainWindow(QMainWindow):
         self.card_iris.set_value(iris.get("label", "—"), "i + u/d")
         self.card_iso.set_value(iso.get("label", "—"), "g + u/d")
         self.card_shutter.set_value(shutter.get("label", "—") if shutter_mode == "Speed" else shutter_mode,
-                                    "s + u/d / u: 遅く / d: 速く")
+                                    "s + u/d")
         self.nd_on = nd_filter.get("label") == "ON"
         nd_label = nd_density.get("label", "—") if self.nd_on else "OFF" if nd_filter.get("label") == "OFF" else "—"
-        self.card_nd.set_value(nd_label, "n + u/d / b: ON/OFF / m: OFF")
-        self.card_camera.set_value(state.get("cameraModel", "—"), state.get("cameraId", ""))
+        self.card_nd.set_value(nd_label, "n + u/d")
+        self.camera_label.setText(state.get("cameraModel") or "FX6")
+        self.camera_label.setToolTip(state.get("cameraId", ""))
         backend_build = str(self.backend_runtime.get("buildId", "—"))
         backend_path = str(self.backend_runtime.get("executablePath", self.backend.summary()))
-        self.card_backend.set_value(backend_build, "バックエンド稼働中")
-        self.card_backend.setToolTip(backend_path)
+        self.backend_label.setText(f"Backend: {backend_build}")
+        self.backend_label.setToolTip(backend_path)
         log_path = str(state.get('logPath', '—'))
-        self.log_path_label.setText(f"Log: {pathlib.Path(log_path).name}")
         self.log_path_label.setToolTip(log_path)
 
     def disconnect_camera(self) -> None:
@@ -678,8 +696,10 @@ class MainWindow(QMainWindow):
         self.refresh_timer.stop()
         self.camera_connected = False
         self.control_mode = None
+        default_size = (self.width(), self.height()) == OPERATION_SIZE
         self.stack.setCurrentWidget(self.login_page)
-        if (self.width(), self.height()) == OPERATION_SIZE:
+        self.setMinimumSize(800, 600)
+        if default_size:
             self.resize(*LOGIN_SIZE)
         self._set_login_status("切断しました。", "ok")
 

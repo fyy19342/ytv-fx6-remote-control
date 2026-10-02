@@ -71,6 +71,7 @@ class GuiKeyboardTest(unittest.TestCase):
         self.app.processEvents()
         self.assertTrue(self.window.isActiveWindow())
         self.assertIs(self.window.stack.currentWidget(), self.window.operation_page)
+        self.assertEqual((self.window.width(), self.window.height()), (800, 480))
 
     def key(self, text, target=None):
         QTest.keyClicks(target or self.window.operation_page, text)
@@ -240,13 +241,19 @@ class GuiKeyboardTest(unittest.TestCase):
 
     def test_child_button_focus_and_no_repeat_or_modifiers(self):
         self.operation()
-        self.window.disconnect_button.setFocus()
-        self.key("iu", self.window.disconnect_button)
+        self.window.guide_button.click()
+        self.assertTrue(self.window.keyboard_guide.isVisible())
+        self.assertEqual(self.api.calls, [])
+        self.window.guide_button.setFocus()
+        self.key("iu", self.window.guide_button)
         self.assertEqual(self.api.calls, [("/api/iris/step", {"delta": 1})])
-        QTest.keyClick(self.window.disconnect_button, Qt.Key_U, Qt.ControlModifier)
-        self.app.sendEvent(self.window.disconnect_button,
+        QTest.keyClick(self.window.guide_button, Qt.Key_U, Qt.ControlModifier)
+        self.app.sendEvent(self.window.guide_button,
                            QKeyEvent(QEvent.KeyPress, Qt.Key_U, Qt.NoModifier, "u", True, 2))
         self.assertEqual(len(self.api.calls), 1)
+        self.window.guide_button.click()
+        self.assertFalse(self.window.keyboard_guide.isVisible())
+        self.assertEqual(self.window.control_mode, ControlMode.IRIS)
 
     def test_inactive_window_modal_and_disconnect_do_not_operate(self):
         self.operation()
