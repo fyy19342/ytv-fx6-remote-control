@@ -19,6 +19,7 @@ class FakeApi:
         self.fail = False
         self.state = {"connected": True, "cameraModel": "FX6 test double",
                       "iris": {"label": "F4"}, "iso": {"label": "ISO 800"},
+                      "shutterSpeed": {"label": "1/60 s"}, "shutterMode": {"label": "Speed"},
                       "ndFilter": {"label": "OFF"}, "ndOpticalDensity": {"label": "1/~4 (OD 0.6)"}}
 
     def get(self, path):
@@ -29,7 +30,8 @@ class FakeApi:
         if self.fail:
             self.state["ndFilter"] = {"label": "OFF"}
             raise ApiError("ND ON aborted; ND OFF confirmed")
-        if path == "/api/nd/on": self.state["ndFilter"] = {"label": "ON"}
+        if path == "/api/nd/toggle":
+            self.state["ndFilter"] = {"label": "OFF" if self.state["ndFilter"]["label"] == "ON" else "ON"}
         if path == "/api/nd/off": self.state["ndFilter"] = {"label": "OFF"}
         return self.state.copy()
 
@@ -74,8 +76,8 @@ class GuiKeyboardTest(unittest.TestCase):
     def test_login_text_is_not_a_camera_command(self):
         self.window.user_input.setText("")
         self.window.user_input.setFocus()
-        self.key("ignudbm", self.window.user_input)
-        self.assertEqual(self.window.user_input.text(), "ignudbm")
+        self.key("ignsudbm", self.window.user_input)
+        self.assertEqual(self.window.user_input.text(), "ignsudbm")
         self.assertEqual(self.api.calls, [])
         self.assertIsNone(self.window.control_mode)
 
@@ -125,13 +127,15 @@ class GuiKeyboardTest(unittest.TestCase):
         self.operation()
         self.key("u")
         self.assertEqual(self.api.calls, [])
-        self.key("iudgudnbudm")
+        self.key("iudgudsudnbudm")
         self.assertEqual(self.api.calls, [
             ("/api/iris/step", {"delta": 1}), ("/api/iris/step", {"delta": -1}),
             ("/api/iso/step", {"delta": 1}), ("/api/iso/step", {"delta": -1}),
-            ("/api/nd/on", {}), ("/api/nd/step", {"delta": -1}),
+            ("/api/shutter/step", {"delta": 1}), ("/api/shutter/step", {"delta": -1}),
+            ("/api/nd/toggle", {}), ("/api/nd/step", {"delta": -1}),
             ("/api/nd/step", {"delta": 1}), ("/api/nd/off", {})])
         self.assertEqual(self.window.card_iso.title_label.text(), "Gain (ISO)")
+        self.assertEqual(self.window.card_shutter.value_label.text(), "1/60 s")
         self.assertEqual(self.window.card_nd.value_label.text(), "OFF")
 
     def test_nd_off_blocks_steps_and_buttons_preserve_mode(self):
@@ -140,7 +144,31 @@ class GuiKeyboardTest(unittest.TestCase):
         self.assertEqual(self.api.calls, [])
         self.key("gbm")
         self.assertEqual(self.window.control_mode, ControlMode.GAIN)
-        self.assertEqual([p for p, _ in self.api.calls], ["/api/nd/on", "/api/nd/off"])
+        self.assertEqual([p for p, _ in self.api.calls], ["/api/nd/toggle", "/api/nd/off"])
+
+    def test_b_toggles_from_live_state_and_retains_shutter_mode(self):
+        self.operation()
+        self.key("sb")
+        self.assertEqual(self.window.control_mode, ControlMode.SHUTTER)
+        self.assertIn("最も明るい", self.window.control_feedback.text())
+        self.key("b")
+        self.assertEqual(self.window.card_nd.value_label.text(), "OFF")
+        self.assertIn("OFF", self.window.control_feedback.text())
+        self.key("b")
+        self.assertNotEqual(self.window.card_nd.value_label.text(), "OFF")
+        self.api.state["ndFilter"] = {"label": "OFF"}  # Camera body changed after the last GUI poll.
+        self.key("b")
+        self.assertNotEqual(self.window.card_nd.value_label.text(), "OFF")
+        self.assertEqual(self.window.control_mode, ControlMode.SHUTTER)
+        self.assertEqual(self.api.calls, [("/api/nd/toggle", {})] * 4)
+
+    def test_shutter_mode_selection_does_not_write_and_non_speed_is_labelled(self):
+        self.operation()
+        self.key("s")
+        self.assertEqual(self.api.calls, [])
+        for mode in ("OFF", "Auto", "ECS", "Angle"):
+            self.window._render_state({**self.api.state, "shutterMode": {"label": mode}})
+            self.assertEqual(self.window.card_shutter.value_label.text(), mode)
 
     def test_nd_uses_fx6_transmittance_readback(self):
         self.operation()
@@ -167,7 +195,7 @@ class GuiKeyboardTest(unittest.TestCase):
         other.setFocus()
         QTest.qWait(40)
         self.assertFalse(self.window.isActiveWindow())
-        self.key("iubm", other)
+        self.key("isubm", other)
         self.assertEqual(self.api.calls, [])
         other.close()
         self.window.activateWindow()
@@ -176,14 +204,14 @@ class GuiKeyboardTest(unittest.TestCase):
         dialog.setModal(True)
         dialog.show()
         QTest.qWait(40)
-        self.key("iubm", dialog)
+        self.key("isubm", dialog)
         self.assertEqual(self.api.calls, [])
         dialog.close()
         self.window.activateWindow()
         self.window.operation_page.setFocus()
         QTest.qWait(40)
         self.window._render_state({"connected": False})
-        self.key("iubm")
+        self.key("isubm")
         self.assertEqual(self.api.calls, [])
 
     def test_nd_failure_shows_reason_and_refreshes_off_state(self):

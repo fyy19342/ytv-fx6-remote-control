@@ -1,4 +1,5 @@
 #include "sdk_service.h"
+#include "shutter_controller.h"
 
 #include <algorithm>
 #include <chrono>
@@ -576,6 +577,20 @@ std::string Fx6SdkService::label_for_property(uint32_t code, uint64_t raw) const
     case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity:
         if ((raw & 0x00ffffff) == SCRSDK::CrISO_AUTO) return "ISO AUTO";
         return "ISO " + comma_separated(exposure_number(ExposureKind::Iso, raw));
+    case SCRSDK::CrDeviceProperty_ShutterSpeedValue:
+        if (!valid_shutter_speed(raw)) return "—";
+        if ((raw >> 32) >= (raw & 0xffffffff))
+            return format_decimal(static_cast<double>(raw >> 32) / (raw & 0xffffffff), 3) + " s";
+        return "1/" + format_decimal(static_cast<double>(raw & 0xffffffff) / (raw >> 32), 2) + " s";
+    case SCRSDK::CrDeviceProperty_ShutterModeStatus:
+        switch (raw) {
+        case SCRSDK::CrShutterModeStatus_Speed: return "Speed";
+        case SCRSDK::CrShutterModeStatus_Off: return "OFF";
+        case SCRSDK::CrShutterModeStatus_Angle: return "Angle";
+        case SCRSDK::CrShutterModeStatus_ECS: return "ECS";
+        case SCRSDK::CrShutterModeStatus_Auto: return "Auto";
+        default: return "—";
+        }
     case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity:
         return raw == SCRSDK::CrGainBaseIsoSensitivity_High ? "High" : raw == SCRSDK::CrGainBaseIsoSensitivity_Low ? "Low" : std::to_string(raw);
     case SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting:
@@ -621,6 +636,8 @@ StateSnapshot Fx6SdkService::get_state() {
 
     snapshot.iris = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_FNumber);
     snapshot.iso = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity);
+    snapshot.shutter_speed = read_property_view_locked(SCRSDK::CrDeviceProperty_ShutterSpeedValue);
+    snapshot.shutter_mode = read_property_view_locked(SCRSDK::CrDeviceProperty_ShutterModeStatus);
     snapshot.iso_base = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainBaseIsoSensitivity);
     snapshot.gain_unit = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting);
     snapshot.nd_filter = read_property_view_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_NDFilter);
@@ -666,6 +683,25 @@ bool Fx6SdkService::step_iso(int delta, std::string& error) {
     if (!set_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_GainUnitSetting,
                              static_cast<uint64_t>(SCRSDK::CrGainUnitSetting_ISO), error, true)) return false;
     return step_array_property_locked(SCRSDK::CrDevicePropertyCode::CrDeviceProperty_IsoSensitivity, delta, error);
+}
+
+bool Fx6SdkService::step_shutter(int delta, std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!connected_) { error = "Camera is not connected."; return false; }
+    auto code_for = [](ShutterProperty p) -> uint32_t {
+        return p == ShutterProperty::Mode ? SCRSDK::CrDeviceProperty_ShutterModeStatus
+                                         : SCRSDK::CrDeviceProperty_ShutterSpeedValue;
+    };
+    ShutterController controller([this, code_for](auto p) {
+        const auto view = read_property_view_locked(code_for(p));
+        return ShutterReading{view.supported, view.writable, view.raw, view.possible};
+    }, [this, code_for](auto p, auto value, auto& reason) {
+        return set_property_locked(code_for(p), value, reason, true);
+    }, SCRSDK::CrShutterModeStatus_Speed);
+    const bool ok = controller.step(delta, error);
+    if (!ok) { set_last_error(error); logger_.error(error); }
+    else set_last_error("");
+    return ok;
 }
 
 bool Fx6SdkService::toggle_iso_base(std::string& error) {
@@ -722,6 +758,15 @@ bool Fx6SdkService::set_nd(bool enabled, std::string& error) {
     std::lock_guard<std::mutex> lock(sdk_mutex_);
     if (!connected_) { error = "Camera is not connected."; return false; }
     const bool ok = nd_controller_locked().set(enabled, error);
+    if (!ok) { set_last_error(error); logger_.error(error); }
+    else set_last_error("");
+    return ok;
+}
+
+bool Fx6SdkService::toggle_nd(std::string& error) {
+    std::lock_guard<std::mutex> lock(sdk_mutex_);
+    if (!connected_) { error = "Camera is not connected."; return false; }
+    const bool ok = nd_controller_locked().toggle(error);
     if (!ok) { set_last_error(error); logger_.error(error); }
     else set_last_error("");
     return ok;

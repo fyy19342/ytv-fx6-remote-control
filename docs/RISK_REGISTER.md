@@ -1,9 +1,10 @@
-# 検証範囲と残る制約 — 20261002a
+# 検証範囲と残る制約 — 20261002b
 
 | 項目 | 対応と残る制約 |
 | --- | --- |
 | ND ON の部分成功 | 途中失敗時は OFF 要求と読み戻し。rollback 失敗は明示。通信断時に実機の状態を保証できない |
 | ND OFF 中の u/d | GUI と backend が拒否。controller の無書込みを CTest で確認 |
+| シャッター | 調整時に手動 Speed に切り替え、設定を維持。モード変更後の失敗で元モードへ自動復帰はしない。読戻し失敗は明示 |
 | Gain の解釈 | Gain (ISO) = SDK ISO sensitivity。AUTO を除外し、数値順で操作 |
 | キーの誤作動 | 操作ページ・active window・接続・modal 状態を確認。長押し反復は無効 |
 | 旧 backend | 起動前後の build ID とプロセスを照合。自己確認は port/PID/path を確認 |

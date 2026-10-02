@@ -38,18 +38,28 @@ int main() {
     auto c = normal.control();
     check(!c.step(1, error) && normal.writes == 0, "OFF step must not write any property");
     check(!c.step(-1, error) && normal.writes == 0, "OFF brighten must not write");
-    check(c.set(true, error), "b succeeds");
-    check(normal.state[NdProperty::Density].value == 60, "b selects minimum");
+    check(c.toggle(error), "b from OFF succeeds");
+    check(normal.state[NdProperty::Density].value == 60, "b from OFF selects minimum");
     check(c.step(1, error) && normal.state[NdProperty::Density].value == 90, "d darkens one step");
     check(c.step(-1, error) && normal.state[NdProperty::Density].value == 60, "u brightens one step");
-    check(c.step(1, error) && c.set(true, error) && normal.state[NdProperty::Density].value == 60,
-          "b resets an already-ON ND to minimum");
+    check(c.step(1, error) && c.toggle(error) && normal.state[NdProperty::Filter].value == 0,
+          "b while ON turns OFF");
+    check(c.toggle(error) && normal.state[NdProperty::Density].value == 60,
+          "next b returns ON at minimum, not the previous density");
     check(c.set(false, error) && normal.state[NdProperty::Filter].value == 0, "m turns OFF");
     check(c.set(true, error) && normal.state[NdProperty::Density].value == 60, "ON never restores previous density");
+    // Body changes are read for every toggle, without a frontend cache.
+    normal.state[NdProperty::Filter].value = 0;
+    check(c.toggle(error) && normal.state[NdProperty::Filter].value == 1, "toggle uses latest body state");
+    for (const auto readable : {false, true}) {
+        Camera unknown;
+        unknown.state[NdProperty::Filter] = {readable, true, 99, {0, 1}};
+        check(!unknown.control().toggle(error) && unknown.writes == 0, "unknown toggle state never writes");
+    }
     for (int failure = 1; failure <= 4; ++failure) {
         Camera broken;
         broken.fail_at = failure;
-        check(!broken.control().set(true, error), "ON stage failure is reported");
+        check(!broken.control().toggle(error), "toggle ON stage failure is reported");
         check(broken.state[NdProperty::Filter].value == 0, "each ON stage failure returns OFF");
         check(error.find("OFF confirmed") != std::string::npos, "rollback confirmation included");
     }
@@ -74,7 +84,7 @@ int main() {
     already_on.state[NdProperty::Filter].value = 1;
     already_on.state[NdProperty::Density].writable = false;
     check(!already_on.control().set(true, error) && already_on.state[NdProperty::Filter].value == 0,
-          "failed b while ON follows explicit OFF policy");
+          "failed explicit ON follows OFF recovery policy");
     // Actual FX6 readback: Preset mode permits switching to Variable, while
     // Filter and Density remain read-only until that switch has completed.
     for (const auto action : {0, 1, 2}) {

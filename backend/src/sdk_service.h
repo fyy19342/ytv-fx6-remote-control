@@ -45,6 +45,8 @@ struct StateSnapshot {
 
     PropertyView iris;
     PropertyView iso;
+    PropertyView shutter_speed;
+    PropertyView shutter_mode;
     PropertyView iso_base;
     PropertyView gain_unit;
     PropertyView nd_filter;
@@ -69,9 +71,11 @@ public:
 
     bool step_iris(int delta, std::string& error);
     bool step_iso(int delta, std::string& error);
+    bool step_shutter(int delta, std::string& error);
     bool toggle_iso_base(std::string& error);
     bool set_iso_base(bool high, std::string& error);
     bool set_nd(bool enabled, std::string& error);
+    bool toggle_nd(std::string& error);
     bool step_nd(int delta, std::string& error);
 
 private:

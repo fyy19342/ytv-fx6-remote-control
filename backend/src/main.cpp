@@ -100,6 +100,8 @@ std::string state_to_json(const StateSnapshot& state) {
         << "\"logPath\":" << json_util::quote(state.log_path) << ','
         << "\"iris\":" << property_to_json(state.iris) << ','
         << "\"iso\":" << property_to_json(state.iso) << ','
+        << "\"shutterSpeed\":" << property_to_json(state.shutter_speed) << ','
+        << "\"shutterMode\":" << property_to_json(state.shutter_mode) << ','
         << "\"isoBase\":" << property_to_json(state.iso_base) << ','
         << "\"gainUnit\":" << property_to_json(state.gain_unit) << ','
         << "\"ndFilter\":" << property_to_json(state.nd_filter) << ','
@@ -214,6 +216,26 @@ int main(int argc, char** argv) {
         const int delta = parse_int_param(req, "delta", 0);
         std::string error;
         if (!service.step_iso(delta, error)) {
+            res.status = 400;
+            res.set_content(error_response(error), "application/json; charset=utf-8");
+            return;
+        }
+        res.set_content(success_response(state_to_json(service.get_state())), "application/json; charset=utf-8");
+    });
+
+    server.Post("/api/shutter/step", [&](const httplib::Request& req, httplib::Response& res) {
+        std::string error;
+        if (!service.step_shutter(parse_int_param(req, "delta", 0), error)) {
+            res.status = 400;
+            res.set_content(error_response(error), "application/json; charset=utf-8");
+            return;
+        }
+        res.set_content(success_response(state_to_json(service.get_state())), "application/json; charset=utf-8");
+    });
+
+    server.Post("/api/nd/toggle", [&](const httplib::Request&, httplib::Response& res) {
+        std::string error;
+        if (!service.toggle_nd(error)) {
             res.status = 400;
             res.set_content(error_response(error), "application/json; charset=utf-8");
             return;

@@ -1,4 +1,4 @@
-# SDK notes — 20261002a
+# SDK notes — 20261002b
 
 照合元はローカルの Sony Camera Remote SDK 2.01.00 HTML reference、機種別 Function List、および実機が返す property の有効値・書き込み可否です。incoming と SDK headers/runtime は GitHub のソースへ含めません。
 
@@ -13,3 +13,7 @@ ND ON は設定通知を待って読み戻す複数の処理です。失敗後�
 IP 指定は CreateCameraObjectInfoEthernetConnection（FX6 / SSH ON）と GetFingerprint を使用します。IPv4 の第1オクテットを下位8bitに格納します。6byte 識別子は reference の許容どおりオブジェクト固有の値を使い、実 MAC としては表示しません。指紋取得では認証や設定変更を行わず、接続直前の指紋と一致することを確認します。
 
 macOS runtime は3個の sibling dylib + Contents/Frameworks/CrAdapter の4個の dylib。SDK 起動、実機認証、SDK 読み戻し、映像の光学変化は別々に検証します。
+
+ShutterSpeedValue は FX6 対応の UInt64Array で、上位32bit が秒数の分子、下位32bit が分母です。ShutterSpeed（UInt32）とは区別します。ShutterModeStatus の Speed を有効値・書き込み可否と照合して設定し、その後に速度の候補を読み直します。分数を交差乗算で比較して隣へ移動し、同じ速度の別表現は重複として扱います。範囲端は現在値を維持します。
+
+ND トグルは SDK mutex 内で現在の NDFilter を読み、ON/OFF 操作を続けます。GUI の1秒周期キャッシュから ON/OFF の行き先を決めません。読み取り不可・未知値では書き込みを行いません。

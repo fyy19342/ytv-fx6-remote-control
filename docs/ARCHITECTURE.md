@@ -1,4 +1,4 @@
-# Architecture — 20261002a
+# Architecture — 20261002b
 
 `FX6OperationApp.app` の PySide6 GUI がローカル HTTP backend `fx6d` に要求し、backend が Sony Camera Remote SDK を操作します。キーボード入力は GUI 内の QShortcut に限ります。グローバルホットキーや外部操作 plugin は使用しません。
 
@@ -11,3 +11,5 @@ ND の値選択は `nd_state_machine`、設定順序と OFF への失敗処理�
 SDK 設定は mutex 内で直列化し、変更通知待ちと読み戻しを行います。ND の複数 property 更新は原子的ではありません。GUI のテスト用 API 差し替えは tests に限定し、配布アプリは実 SDK backend に接続します。
 
 runtime は `fx6d` の隣に3個の dylib、`Contents/Frameworks/CrAdapter/` に4個の dylibを配置します。開発パスへの依存を排除し、bundle 単体で解決します。
+
+シャッターの速度候補選択と Speed モードへの切り替えは `shutter_controller` に分離しています。SDK 不要の CTest で分数の順序、同値、上下限、無効値、失敗と読み戻し不一致を検証します。

@@ -57,6 +57,16 @@ bool NdController::fail_off(const std::string& cause, std::string& error) {
     return false;
 }
 
+bool NdController::toggle(std::string& error) {
+    error.clear();
+    const auto filter = read_(NdProperty::Filter);
+    if (!filter.readable || (filter.value != values_.off && filter.value != values_.on)) {
+        error = "Cannot toggle ND: current ON/OFF state is unavailable. No settings were changed.";
+        return false;
+    }
+    return set(filter.value == values_.off, error);
+}
+
 bool NdController::set(bool enabled, std::string& error) {
     error.clear();
     if (!enabled) {
@@ -65,7 +75,7 @@ bool NdController::set(bool enabled, std::string& error) {
         return prepare(false, error) && apply(NdProperty::Filter, values_.off, error);
     }
     // Sequential SDK calls cannot be atomic. Any failure fails closed to ND OFF,
-    // including when b was pressed while ND was already ON.
+    // including an explicit ON request when ND was already ON.
     if (!prepare(true, error) ||
         !apply(NdProperty::Filter, values_.on, error)) {
         return fail_off(error, error);

@@ -17,6 +17,8 @@ std::string sdk_property_name(SCRSDK::CrDevicePropertyCode code) {
     switch (code) {
     case SCRSDK::CrDeviceProperty_FNumber: return "FNumber";
     case SCRSDK::CrDeviceProperty_IsoSensitivity: return "IsoSensitivity";
+    case SCRSDK::CrDeviceProperty_ShutterSpeedValue: return "ShutterSpeedValue";
+    case SCRSDK::CrDeviceProperty_ShutterModeStatus: return "ShutterModeStatus";
     case SCRSDK::CrDeviceProperty_GainUnitSetting: return "GainUnitSetting";
     case SCRSDK::CrDeviceProperty_GainBaseIsoSensitivity: return "GainBaseIsoSensitivity";
     case SCRSDK::CrDeviceProperty_NDFilter: return "NDFilter";

@@ -1,4 +1,4 @@
-# Build — 20261002a
+# Build — 20261002b
 
 `build_info.json` が build ID / version / port の単一ソースです。アプリ配布は macOS / arm64、開発には Xcode Command Line Tools、CMake、Python 3.11 が必要です。Python 依存は requirements.txt で PySide6 6.11.0 / PyInstaller 6.19.0 に固定しています。
 
@@ -27,9 +27,9 @@ Qt のレイアウト試験は 800×600・1040×800・1280×900 で入力欄の�
 
 `package_distribution.sh` は通常 build → self_check → LGPL source archive → SDK-free source/app staging → zip 内容検証 → SHA256 を実行します。`--reuse-verified-build` は検証済み input/artifact の digest が一致する場合だけ許可します。
 
-- `dist/FX6OperationApp-20261002a-macos-arm64.zip` と `.zip.sha256`
-- `dist/FX6OperationApp-20261002a-open-source-dependencies.tar` と `.tar.sha256`
-- `docs/SELF_CHECK_20261002a.md` / `docs/DISTRIBUTION_MANIFEST_20261002a.md`
-- 詳細ログはローカル `dist/checks/20261002a/`。公開 zip はパスを置換した JSON 要約のみ。
+- `dist/FX6OperationApp-20261002b-macos-arm64.zip` と `.zip.sha256`
+- `dist/FX6OperationApp-20261002b-open-source-dependencies.tar` と `.tar.sha256`
+- `docs/SELF_CHECK_20261002b.md` / `docs/DISTRIBUTION_MANIFEST_20261002b.md`
+- 詳細ログはローカル `dist/checks/20261002b/`。公開 zip はパスを置換した JSON 要約のみ。
 
 従来の `package_release.sh` は SDK を含むローカル保管用の丸ごと置換版を生成します。**この成果物を GitHub や不特定の第三者へアップロードしないでください。** GitHub 配布は `package_distribution.sh` の出力を使います。npm / Stream Deck は使用しません。

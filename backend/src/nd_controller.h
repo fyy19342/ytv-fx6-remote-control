@@ -27,6 +27,7 @@ public:
     NdController(Read read, Write write, Values values)
         : read_(read), write_(write), values_(values) {}
     bool set(bool enabled, std::string& error);
+    bool toggle(std::string& error);
     bool step(int direction, std::string& error);
 
 private:

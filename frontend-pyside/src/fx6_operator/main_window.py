@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
         heading_font.setBold(True)
         heading.setFont(heading_font)
 
-        sub = QLabel("Sony FX6 を Camera Remote SDK 経由で接続し、キーボードで Iris・Gain (ISO)・ND を操作します。")
+        sub = QLabel("Sony FX6 を Camera Remote SDK 経由で接続し、キーボードで Iris・Gain (ISO)・ND・Shutter Speed を操作します。")
         sub.setStyleSheet("color:#9aa6b2;font-size:14px;")
         sub.setWordWrap(True)
 
@@ -379,15 +379,17 @@ class MainWindow(QMainWindow):
 
         self.card_iris = MetricCard("Iris")
         self.card_iso = MetricCard("Gain (ISO)")
+        self.card_shutter = MetricCard("Shutter Speed")
         self.card_nd = MetricCard("ND")
         self.card_camera = MetricCard("Camera")
         self.card_backend = MetricCard("Backend")
 
         grid.addWidget(self.card_iris, 0, 0)
         grid.addWidget(self.card_iso, 0, 1)
-        grid.addWidget(self.card_nd, 0, 2)
-        grid.addWidget(self.card_camera, 1, 0)
-        grid.addWidget(self.card_backend, 1, 1, 1, 2)
+        grid.addWidget(self.card_shutter, 0, 2)
+        grid.addWidget(self.card_nd, 1, 0)
+        grid.addWidget(self.card_camera, 1, 1)
+        grid.addWidget(self.card_backend, 1, 2)
 
         self.mode_label = QLabel("操作モード: 未選択")
         self.mode_label.setStyleSheet(
@@ -395,7 +397,7 @@ class MainWindow(QMainWindow):
             "padding:12px 16px;border-radius:12px;font-size:18px;font-weight:700;"
         )
         self.mode_label.setWordWrap(True)
-        self.control_feedback = QLabel("i / g / n で操作モードを選択してください。")
+        self.control_feedback = QLabel("i / g / n / s で操作モードを選択してください。")
         self.control_feedback.setWordWrap(True)
         self.control_feedback.setStyleSheet("color:#9cb2cf;")
 
@@ -417,9 +419,10 @@ class MainWindow(QMainWindow):
         footer.addWidget(self.quit_button)
 
         guide = QLabel(
-            "モード  i: Iris   g: Gain (ISO)   n: ND\n"
+            "モード  i: Iris   g: Gain (ISO)   n: ND   s: Shutter Speed\n"
             "調整  u: 明るく   d: 暗く  (選択モードを1段ずつ)\n"
-            "ND     b: ON + 最小濃度   m: OFF"
+            "ND     b: ON/OFF 切替 (ON 時は最小濃度)   m: OFF\n"
+            "Shutter  u: 遅く   d: 速く (調整時は手動 Speed に切替)"
         )
         guide.setStyleSheet("background:#172030;color:#d7e4f7;padding:16px;border-radius:12px;")
         guide.setWordWrap(True)
@@ -553,7 +556,7 @@ class MainWindow(QMainWindow):
             return
         self.control_mode = None
         self.mode_label.setText("操作モード: 未選択")
-        self._set_control_feedback("i / g / n で操作モードを選択してください。")
+        self._set_control_feedback("i / g / n / s で操作モードを選択してください。")
         self.stack.setCurrentWidget(self.operation_page)
         self.operation_page.setFocus()
         self.refresh_timer.start()
@@ -575,7 +578,7 @@ class MainWindow(QMainWindow):
 
         if key in ("u", "d"):
             if self.control_mode is None:
-                self._set_control_feedback("先に i / g / n で操作モードを選択してください。", error=True)
+                self._set_control_feedback("先に i / g / n / s で操作モードを選択してください。", error=True)
                 return
             if self.control_mode == ControlMode.ND and not self.nd_on:
                 self._set_control_feedback("ND は OFF または状態不明です。b で最小濃度の ON にしてください。", error=True)
@@ -596,10 +599,12 @@ class MainWindow(QMainWindow):
             return
 
         self._render_state(state)
-        if key == "b":
+        if key == "b" and self.nd_on:
             self._set_control_feedback("ND を ON にし、最も明るい濃度にしました。")
-        elif key == "m":
+        elif key in ("b", "m") and state.get("ndFilter", {}).get("label") == "OFF":
             self._set_control_feedback("ND を OFF にしました。")
+        elif key in ND_KEYS:
+            self._set_control_feedback("ND の状態を確認できません。カメラの状態を確認してください。", error=True)
         else:
             self._set_control_feedback(f"{self.control_mode.value} を1段調整しました。")
 
@@ -625,14 +630,18 @@ class MainWindow(QMainWindow):
 
         iris = state.get("iris", {})
         iso = state.get("iso", {})
+        shutter = state.get("shutterSpeed", {})
+        shutter_mode = state.get("shutterMode", {}).get("label", "—")
         nd_filter = state.get("ndFilter", {})
         nd_density = state.get("ndValue", state.get("ndOpticalDensity", {}))
 
         self.card_iris.set_value(iris.get("label", "—"), "i + u/d")
         self.card_iso.set_value(iso.get("label", "—"), "g + u/d")
+        self.card_shutter.set_value(shutter.get("label", "—") if shutter_mode == "Speed" else shutter_mode,
+                                    "s + u/d / u: 遅く / d: 速く")
         self.nd_on = nd_filter.get("label") == "ON"
         nd_label = nd_density.get("label", "—") if self.nd_on else "OFF" if nd_filter.get("label") == "OFF" else "—"
-        self.card_nd.set_value(nd_label, "n + u/d / b: ON / m: OFF")
+        self.card_nd.set_value(nd_label, "n + u/d / b: ON/OFF / m: OFF")
         self.card_camera.set_value(state.get("cameraModel", "—"), state.get("cameraId", ""))
         backend_build = str(self.backend_runtime.get("buildId", "—"))
         backend_path = str(self.backend_runtime.get("executablePath", self.backend.summary()))

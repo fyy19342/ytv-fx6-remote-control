@@ -1,4 +1,4 @@
-# SDK runtime layout — 20261002a
+# SDK runtime layout — 20261002b
 
 Sony RemoteCli / SimpleCli の配置に合わせています。
 
