@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QComboBox,
     QFormLayout,
     QFrame,
@@ -32,13 +31,15 @@ try:
     from .backend_process import BackendProcess
     from .build_info import load_build_info
     from .keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, ACTION_KEYS, step_command
-    from .usage_terms import USAGE_NOTICE_HTML, CONSENT_LABEL
 except ImportError:
     from api import ApiClient, ApiError  # type: ignore
     from backend_process import BackendProcess  # type: ignore
     from build_info import load_build_info  # type: ignore
     from keyboard_controls import ControlMode, MODE_KEYS, ND_KEYS, ACTION_KEYS, step_command  # type: ignore
-    from usage_terms import USAGE_NOTICE_HTML, CONSENT_LABEL  # type: ignore
+
+
+LOGIN_SIZE = (900, 600)
+OPERATION_SIZE = (1040, 800)
 
 
 CARD_STYLE = """
@@ -66,7 +67,7 @@ QWidget {
 QMainWindow, QStackedWidget, QScrollArea, QWidget#pageSurface {
     background-color: #0c1522;
 }
-QLabel, QCheckBox { background: transparent; }
+QLabel { background: transparent; }
 QLineEdit, QComboBox {
     background-color: #132033;
     border: 1px solid #304866;
@@ -139,7 +140,7 @@ class MainWindow(QMainWindow):
         self._closing = False
 
         self.setWindowTitle(f"FX6 Operation App [{self.build_info['build_id']}]")
-        self.resize(1040, 800)
+        self.resize(*LOGIN_SIZE)
         self.setMinimumSize(800, 600)
         self.setStyleSheet(WINDOW_STYLE)
 
@@ -242,16 +243,16 @@ class MainWindow(QMainWindow):
     def _build_login_page(self) -> QWidget:
         root = QWidget()
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
 
         heading = QLabel("FX6 Operation App")
         heading_font = QFont()
-        heading_font.setPointSize(28)
+        heading_font.setPointSize(24)
         heading_font.setBold(True)
         heading.setFont(heading_font)
 
-        sub = QLabel("Sony FX6 を Camera Remote SDK 経由で接続し、キーボードで Iris・Gain (ISO)・ND・Shutter Speed を操作します。")
+        sub = QLabel("カメラを選び、User / Password を入力して接続します。")
         sub.setStyleSheet("color:#9aa6b2;font-size:14px;")
         sub.setWordWrap(True)
 
@@ -260,13 +261,17 @@ class MainWindow(QMainWindow):
             "background:#123154;color:#cde5ff;border:1px solid #2b5a8f;"
             "padding:6px 10px;border-radius:8px;font-weight:700;"
         )
+        header = QHBoxLayout()
+        header.addWidget(heading)
+        header.addStretch(1)
+        header.addWidget(build_badge)
 
         form_card = QFrame()
         form_card.setObjectName("loginCard")
         form_card.setStyleSheet(CARD_STYLE)
         form = QFormLayout(form_card)
-        form.setContentsMargins(24, 24, 24, 24)
-        form.setSpacing(18)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(12)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
         form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -310,18 +315,9 @@ class MainWindow(QMainWindow):
             field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.connect_button = QPushButton("接続")
-        self.connect_button.setEnabled(False)
         self.connect_button.clicked.connect(self.connect_camera)
         self.connect_button.setMinimumWidth(120)
         self.connect_button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-
-        usage_notice = QLabel(USAGE_NOTICE_HTML)
-        usage_notice.setWordWrap(True)
-        usage_notice.setOpenExternalLinks(True)
-        usage_notice.setStyleSheet("color:#9aa6b2;font-size:12px;")
-        self.usage_consent = QCheckBox(CONSENT_LABEL)
-        self.usage_consent.setChecked(False)
-        self.usage_consent.toggled.connect(self.connect_button.setEnabled)
 
         form.addRow("Camera", camera_row)
         form.addRow("FX6 IP", ip_row)
@@ -338,12 +334,9 @@ class MainWindow(QMainWindow):
         self.login_backend_label.setStyleSheet("color:#9aa6b2;")
         self.login_backend_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
 
-        layout.addWidget(heading)
+        layout.addLayout(header)
         layout.addWidget(sub)
-        layout.addWidget(build_badge, 0, Qt.AlignLeft)
         layout.addWidget(form_card)
-        layout.addWidget(usage_notice)
-        layout.addWidget(self.usage_consent)
         layout.addWidget(self.login_status)
         layout.addWidget(self.login_backend_label)
         layout.addStretch(1)
@@ -532,9 +525,6 @@ class MainWindow(QMainWindow):
         self.fingerprint_label.setText(camera.get("fingerprint") or "—")
 
     def connect_camera(self) -> None:
-        if not self.usage_consent.isChecked():
-            self._set_login_status("利用条件への同意後に接続してください。", "warn")
-            return
         if not self.backend_ready:
             self._set_login_status("一致する backend が起動していません。", "error")
             return
@@ -566,6 +556,8 @@ class MainWindow(QMainWindow):
         self.mode_label.setText("操作モード: 未選択")
         self._set_control_feedback("i / g / n / s で操作モードを選択してください。")
         self.stack.setCurrentWidget(self.operation_page)
+        if (self.width(), self.height()) == LOGIN_SIZE:
+            self.resize(*OPERATION_SIZE)
         self.operation_page.setFocus()
         self.refresh_timer.start()
         self._render_state(state)
@@ -687,6 +679,8 @@ class MainWindow(QMainWindow):
         self.camera_connected = False
         self.control_mode = None
         self.stack.setCurrentWidget(self.login_page)
+        if (self.width(), self.height()) == OPERATION_SIZE:
+            self.resize(*LOGIN_SIZE)
         self._set_login_status("切断しました。", "ok")
 
     def quit_app(self) -> None:

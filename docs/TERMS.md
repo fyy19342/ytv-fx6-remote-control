@@ -2,7 +2,7 @@
 
 このアプリは本プロジェクトが開発・提供するもので、Sony の公式製品ではありません。Sony が所有・開発・提供・サポートするアプリではありません。サポートは [本プロジェクトの Issues](https://github.com/fyy19342/ytv-fx6-remote-control/issues) で受け付けます。
 
-ダウンロード・使用前に [Sony Camera Remote SDK の利用規約](https://support.d-imaging.sony.co.jp/app/sdk/licenseagreement/en-US.html) と次の条件を確認してください。条件に同意する場合に、Sony 製カメラ等を通常の用途で操作するためにアプリを複製・使用できます。ログイン画面の同意欄は初期状態では未選択です。
+ダウンロード・使用前に [Sony Camera Remote SDK の利用規約](https://support.d-imaging.sony.co.jp/app/sdk/licenseagreement/en-US.html) と次の条件を確認してください。条件に同意する場合に、Sony 製カメラ等を通常の用途で操作するためにアプリを複製・使用できます。
 
 - 本アプリを通じて使用・制御した機器は、Sony がその機器について別途定めるメーカー保証の対象外になります。
 - アプリ・SDK・機器を、武器の設計・開発・製造・改造・使用・設置・検査・保管、爆発物・化学兵器・生物兵器その他有害物の輸送、情報収集・監視・偵察などの軍事活動に使用できません。その目的で使用する第三者への提供もできません。武器の定義は Sony 規約に従います。

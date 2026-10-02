@@ -64,7 +64,6 @@ class GuiKeyboardTest(unittest.TestCase):
 
     def operation(self):
         self.window.backend_ready = True
-        self.window.usage_consent.setChecked(True)
         self.window.camera_combo.addItem("Test camera", "test-camera")
         self.window.connect_camera()
         self.window.refresh_timer.stop()
@@ -85,17 +84,24 @@ class GuiKeyboardTest(unittest.TestCase):
         self.assertEqual(self.api.calls, [])
         self.assertIsNone(self.window.control_mode)
 
-    def test_camera_connection_requires_explicit_consent(self):
-        self.assertFalse(self.window.usage_consent.isChecked())
-        self.assertFalse(self.window.connect_button.isEnabled())
-        self.window.backend_ready = True
-        self.window.camera_combo.addItem("Test", "test-camera")
-        self.window.connect_camera()
-        self.assertEqual(self.api.calls, [])
-        self.window.usage_consent.setChecked(True)
+    def test_camera_connection_uses_credentials_without_consent_gate(self):
         self.assertTrue(self.window.connect_button.isEnabled())
-        self.window.usage_consent.setChecked(False)
-        self.assertFalse(self.window.connect_button.isEnabled())
+        self.window.connect_camera()
+        self.assertEqual(self.api.calls, [], "Unavailable backend must still prevent connection")
+        self.window.backend_ready = True
+        with patch("fx6_operator.main_window.QMessageBox.warning") as warning:
+            self.window.connect_camera()
+            warning.assert_called_once()
+        self.assertEqual(self.api.calls, [], "A camera must still be selected")
+        self.window.camera_combo.addItem("Test", "test-camera")
+        self.window.current_camera_map = {"test-camera": {"fingerprint": "test-fingerprint"}}
+        self.window.user_input.setText("test-user")
+        self.window.password_input.setText("test-password")
+        self.window.connect_camera()
+        self.window.refresh_timer.stop()
+        self.assertEqual(self.api.calls, [("/api/connect", {"cameraId": "test-camera",
+                         "userId": "test-user", "password": "test-password", "fingerprint": "test-fingerprint"})])
+        self.assertIs(self.window.stack.currentWidget(), self.window.operation_page)
 
     def test_direct_ip_probe_selects_target_without_authentication(self):
         camera = {"id": "ip:192.168.0.5", "ipAddress": "192.168.0.5", "fingerprint": "test-fingerprint"}
@@ -107,8 +113,6 @@ class GuiKeyboardTest(unittest.TestCase):
         self.assertEqual(self.window.camera_combo.currentData(), camera["id"])
         self.assertEqual(self.window.fingerprint_label.text(), camera["fingerprint"])
         self.assertFalse(self.window.camera_connected)
-        self.assertFalse(self.window.usage_consent.isChecked())
-        self.window.usage_consent.setChecked(True)
         self.window.connect_camera()
         self.window.refresh_timer.stop()
         self.assertEqual(self.api.calls[0][1]["fingerprint"], camera["fingerprint"])

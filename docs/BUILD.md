@@ -1,4 +1,4 @@
-# Build — 20261002d
+# Build — 20261002e
 
 `build_info.json` が build ID / version / port の単一ソースです。アプリ配布は macOS / arm64、開発には Xcode Command Line Tools、CMake、Python 3.11 が必要です。Python 依存は requirements.txt で PySide6 6.11.0 / PyInstaller 6.19.0 に固定しています。
 
@@ -21,15 +21,15 @@ build_app は backend CMake Release と CTest、PyInstaller、runtime とライ�
 
 self_check は Python/shell 文法、Python/Qt tests、CTest、runtime 依存解決、署名、単体 backend・同梱 backend・実 Cocoa app の起動、health / cameras、build ID / PID / path を検証します。既存 port を占有するプロセスを勝手に終了しません。camera 接続は実施しません。
 
-Qt のレイアウト試験は 800×600・1040×800・1280×900 で入力欄の幅、ボタンと選択欄の文字領域、同意欄へのスクロール、カードの枠と長いパスによる横はみ出しを検証します。macOS では Cocoa でも実行し、`dist/checks/BUILD_ID/gui-layout/` に画像を保存します。配布 app の目視結果は build と artifact digest を照合して自己確認へ取り込みます。
+Qt のレイアウト試験は 800×600・1040×800・1280×900 で入力欄の幅、ボタンと選択欄の文字領域、ログイン画面全体がスクロールなしで収まること、カードの枠と長いパスによる横はみ出しを検証します。macOS では Cocoa でも実行し、`dist/checks/BUILD_ID/gui-layout/` に画像を保存します。配布 app の目視結果は build と artifact digest を照合して自己確認へ取り込みます。
 
 ## 成果物
 
 `package_distribution.sh` は通常 build → self_check → LGPL source archive → SDK-free source/app staging → zip 内容検証 → SHA256 を実行します。`--reuse-verified-build` は検証済み input/artifact の digest が一致する場合だけ許可します。
 
-- `dist/FX6OperationApp-20261002d-macos-arm64.zip` と `.zip.sha256`
-- `dist/FX6OperationApp-20261002d-open-source-dependencies.tar` と `.tar.sha256`
-- `docs/SELF_CHECK_20261002d.md` / `docs/DISTRIBUTION_MANIFEST_20261002d.md`
-- 詳細ログはローカル `dist/checks/20261002d/`。公開 zip はパスを置換した JSON 要約のみ。
+- `dist/FX6OperationApp-20261002e-macos-arm64.zip` と `.zip.sha256`
+- `dist/FX6OperationApp-20261002e-open-source-dependencies.tar` と `.tar.sha256`
+- `docs/SELF_CHECK_20261002e.md` / `docs/DISTRIBUTION_MANIFEST_20261002e.md`
+- 詳細ログはローカル `dist/checks/20261002e/`。公開 zip はパスを置換した JSON 要約のみ。
 
 従来の `package_release.sh` は SDK を含むローカル保管用の丸ごと置換版を生成します。**この成果物を GitHub や不特定の第三者へアップロードしないでください。** GitHub 配布は `package_distribution.sh` の出力を使います。npm / Stream Deck は使用しません。

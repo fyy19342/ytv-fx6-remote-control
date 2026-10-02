@@ -1,4 +1,4 @@
-# 現行仕様 — 20261002d / 0.4.6
+# 現行仕様 — 20261002e / 0.4.7
 
 操作は [KEYBOARD_CONTROLS](KEYBOARD_CONTROLS.md) を正本とします。GUI はログイン、検出、接続・切断、Iris / Gain (ISO) / Shutter Speed / ND / Camera / Backend のカード、選択モード、White Balance の色温度・状態、操作結果、終了ボタンを提供します。
 

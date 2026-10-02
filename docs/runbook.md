@@ -1,9 +1,9 @@
-# 運用手順 — 20261002d
+# 運用手順 — 20261002e
 
 1. 旧 app と backend を終了し、`lsof -nP -iTCP:39061 -sTCP:LISTEN` で確認します。
 2. zip を新しいフォルダに展開し `FX6OperationApp.app` を起動します。
-3. タイトル・Runtime build が `20261002d` で、backend executable が今回の bundle を指すことを確認します。
-4. カメラ一覧を更新して FX6 を選びます。自動検出が0台なら FX6 IP → IP を確認で指定します。Fingerprint を本体と照合し、認証情報を入力します。利用条件に同意する場合は本人がチェックして接続します。指紋取得だけでは認証は完了していません。
+3. タイトル・Runtime build が `20261002e` で、backend executable が今回の bundle を指すことを確認します。
+4. カメラ一覧を更新して FX6 を選びます。自動検出が0台なら FX6 IP → IP を確認で指定します。Fingerprint を本体と照合し、User / Password を入力して「接続」を押します。指紋取得だけでは認証は完了していません。
 5. 操作画面をクリックし、i / g / n / s でモードを選び、u / d で1段操作します。b は ND ON/OFF 切り替え（ON 時は最小濃度）、m は ND OFF。s の u は遅く、d は速くします。a は WB メモリー A/B と白い被写体を準備してから押します。
 6. 終了ボタン／ウィンドウを閉じて終了します。自動起動した backend は停止し、再利用した backend は残ります。
 

@@ -71,13 +71,10 @@ class GuiLayoutTest(unittest.TestCase):
                 page = self.window.login_page
                 page.verticalScrollBar().setValue(0)
                 self.capture(f"login-{width}x{height}")
-                page.ensureWidgetVisible(self.window.usage_consent)
-                self.app.processEvents()
-                point = self.window.usage_consent.mapTo(page.viewport(), QPoint(0, 0))
+                point = self.window.login_backend_label.mapTo(page.viewport(), QPoint(0, 0))
                 self.assertGreaterEqual(point.y(), 0)
-                self.assertLessEqual(point.y() + self.window.usage_consent.height(), page.viewport().height())
-                self.assertLessEqual(point.x() + self.window.usage_consent.width(), page.viewport().width())
-                self.capture(f"login-consent-{width}x{height}")
+                self.assertLessEqual(point.y() + self.window.login_backend_label.height(), page.viewport().height())
+                self.assertEqual(page.verticalScrollBar().maximum(), 0, "Compact login must fit without scrolling")
 
     def test_operation_cards_and_long_paths_stay_inside_window(self):
         long_path = "/Users/test/Downloads/" + "long-folder-name/" * 12 + "fx6d"

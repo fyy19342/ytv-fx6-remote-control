@@ -23,7 +23,6 @@ a = Analysis(
         "fx6_operator.backend_process",
         "fx6_operator.build_info",
         "fx6_operator.keyboard_controls",
-        "fx6_operator.usage_terms",
     ],
     hookspath=[],
     hooksconfig={},

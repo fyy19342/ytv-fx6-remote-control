@@ -1,4 +1,4 @@
-# Architecture — 20261002d
+# Architecture — 20261002e
 
 `FX6OperationApp.app` の PySide6 GUI がローカル HTTP backend `fx6d` に要求し、backend が Sony Camera Remote SDK を操作します。キーボード入力は GUI 内の QShortcut に限ります。グローバルホットキーや外部操作 plugin は使用しません。
 

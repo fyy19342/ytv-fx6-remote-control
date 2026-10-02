@@ -1,14 +1,14 @@
-# Distribution manifest 20261002d
+# Distribution manifest 20261002e
 
-- Version: 0.4.6
-- Build ID: 20261002d
+- Version: 0.4.7
+- Build ID: 20261002e
 - Platform: macOS / arm64; host macOS 26.5.1
-- Packaged: 2026-10-02T15:05:21.734964+09:00
+- Packaged: 2026-10-02T15:19:50.440117+09:00
 - App signature: ad-hoc; Apple notarization NOT RUN
-- Source input SHA256: 2471621b23cbf3733f3a9c3e063c4c869d0204a2f480cd6f25f3562c06f8fdf3
-- Verified artifacts SHA256: d644e829decf420db99c11049ca49a2f425c482efb29ad938f8f109a6c90dab0
-- GUI executable SHA256: a18a7864472f943992ebf7ca4da18b52fcd738e0ab4cb46bcdbe4121bcb6e5f0
-- Embedded backend SHA256: c1edadd4b804e187c24db51af87546f5d8bdc66fefd18be3c5ae5bc0943808b2
+- Source input SHA256: b9ff7ead15b51c9938150c7e913d406757cbe4e4c59d3d7ca377dd39a499ef5c
+- Verified artifacts SHA256: b4eb1a523cb445acf9a8672ced016af9aa165e1429a6d44985f8fbcda7eeba82
+- GUI executable SHA256: f9f4febd3c003a768bf7e1a4c2dab1dfb73c4d91ea92b5fcd4e163bfb30a4d85
+- Embedded backend SHA256: ef95ba1b6f142e6220c0ddf87dc453bc0c0d81ca3f7d2d8b96f930c84ff26272
 
 The ZIP includes FX6OperationApp.app, SDK-free source/docs/scripts, licenses, build_info.json,
 install instructions, terms, SELF_CHECK and a sanitized verification/results.json.
