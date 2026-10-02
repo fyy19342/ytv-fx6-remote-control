@@ -1,4 +1,4 @@
-# SDK notes — 20261002c
+# SDK notes — 20261002d
 
 照合元はローカルの Sony Camera Remote SDK 2.01.00 HTML reference、機種別 Function List、および実機が返す property の有効値・書き込み可否です。incoming と SDK headers/runtime は GitHub のソースへ含めません。
 
@@ -25,3 +25,5 @@ Down/Up は値の固定設定ではなくボタンの押下・解放として扱
 OnWarningExt の CrWarningExt_OperationResults / OperationInvalid を api=SetDeviceProperty、code=AWB で照合します。OK のほか暗すぎる、明るすぎる、色温度範囲外、白領域不足等を表示します。無通知15秒・切断は結果未確認です。Colortemp は読み取り表示のみで、この機能から Kelvin 数値や Tint を直接変更しません。
 
 SDK 2.01.00 の機種別表では GetCRSDKOperationResultsSupported は FX6 非対応です。この API で通知能力を推定しません。今回の個体では AWB Down/Up の送信成功後も結果通知が返らない状態を観測したため、通知未確認を明示する表示が必要です。
+
+連打防止は steady_clock による3秒の期限で、結果待ち15秒から独立しています。state の awb.retryAfterMs を GUI の monotonic clock に反映し、GUI のポーリングを待たず3秒後に再入力できます。backend でも期限を確認します。SDK の AWB 通知には要求 ID がないため、未確定の測定に重ねて再実行した後は結果を未確認として扱い、接続をやり直すまで遅れた通知を新しい測定の成功へ誤適用しません。

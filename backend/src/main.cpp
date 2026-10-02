@@ -106,7 +106,8 @@ std::string state_to_json(const StateSnapshot& state) {
         << "\"colorTemperature\":" << property_to_json(state.color_temperature) << ','
         << "\"awbButton\":" << property_to_json(state.awb_button) << ','
         << "\"awb\":{\"status\":" << json_util::quote(state.awb.status)
-        << ",\"message\":" << json_util::quote(state.awb.message) << "},"
+        << ",\"message\":" << json_util::quote(state.awb.message)
+        << ",\"retryAfterMs\":" << state.awb_retry_after_ms << "},"
         << "\"isoBase\":" << property_to_json(state.iso_base) << ','
         << "\"gainUnit\":" << property_to_json(state.gain_unit) << ','
         << "\"ndFilter\":" << property_to_json(state.nd_filter) << ','

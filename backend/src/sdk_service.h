@@ -52,6 +52,7 @@ struct StateSnapshot {
     PropertyView color_temperature;
     PropertyView awb_button;
     AwbProgress awb;
+    int64_t awb_retry_after_ms = 0;
     PropertyView iso_base;
     PropertyView gain_unit;
     PropertyView nd_filter;

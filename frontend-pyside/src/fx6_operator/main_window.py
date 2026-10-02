@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+from time import monotonic
 from typing import Any, Dict, List
 
 from PySide6.QtCore import Qt, QTimer
@@ -401,6 +402,7 @@ class MainWindow(QMainWindow):
         self.control_feedback.setWordWrap(True)
         self.control_feedback.setStyleSheet("color:#9cb2cf;")
         self.awb_running = False
+        self.awb_retry_until = 0.0
         self.white_balance_label = QLabel("White Balance: — / a: AWB を1回実行")
         self.white_balance_label.setWordWrap(True)
         self.white_balance_label.setStyleSheet("color:#d7e4f7;font-size:14px;")
@@ -427,7 +429,7 @@ class MainWindow(QMainWindow):
             "調整  u: 明るく   d: 暗く  (選択モードを1段ずつ)\n"
             "ND     b: ON/OFF 切替 (ON 時は最小濃度)   m: OFF\n"
             "Shutter  u: 遅く   d: 速く (調整時は手動 Speed に切替)\n"
-            "WB     a: AWB を1回実行 (本体の WB メモリー A/B・白い被写体を使用)"
+            "WB     a: AWB を1回実行 (再実行は3秒後 / 本体の WB メモリー A/B・白い被写体を使用)"
         )
         guide.setStyleSheet("background:#172030;color:#d7e4f7;padding:16px;border-radius:12px;")
         guide.setWordWrap(True)
@@ -595,8 +597,8 @@ class MainWindow(QMainWindow):
             path = ND_KEYS[key]
             params = {}
         elif key in ACTION_KEYS:
-            if self.awb_running:
-                self._set_control_feedback("AWB の結果確認中です。再実行は少しお待ちください。")
+            if monotonic() < self.awb_retry_until:
+                self._set_control_feedback("AWB は前回の実行から3秒後に再実行できます。")
                 return
             path = ACTION_KEYS[key]
             params = {}
@@ -650,6 +652,8 @@ class MainWindow(QMainWindow):
         temperature = state.get("colorTemperature", {}).get("label", "—")
         awb = state.get("awb", {})
         self.awb_running = connected and awb.get("status") == "running"
+        retry_ms = max(0, awb.get("retryAfterMs", 0)) if connected else 0
+        self.awb_retry_until = monotonic() + retry_ms / 1000
         wb_message = awb.get("message") or "a: AWB を1回実行"
         self.white_balance_label.setText(f"White Balance: {temperature} / {wb_mode} — {wb_message}")
         wb_color = {"failed": "#fca5a5", "unconfirmed": "#fbbf24"}.get(awb.get("status"), "#d7e4f7")

@@ -36,7 +36,7 @@ class FakeApi:
             self.state["ndFilter"] = {"label": "OFF" if self.state["ndFilter"]["label"] == "ON" else "ON"}
         if path == "/api/nd/off": self.state["ndFilter"] = {"label": "OFF"}
         if path == "/api/white-balance/awb":
-            self.state["awb"] = {"status": "running", "message": "AWB 実行中"}
+            self.state["awb"] = {"status": "running", "message": "AWB 実行中", "retryAfterMs": 3000}
         return self.state.copy()
 
 
@@ -181,7 +181,8 @@ class GuiKeyboardTest(unittest.TestCase):
         self.window._render_state(state)
         self.assertEqual(self.window.card_nd.value_label.text(), "1/4.8")
 
-    def test_awb_action_preserves_mode_blocks_reentry_and_renders_result(self):
+    @patch("fx6_operator.main_window.monotonic", return_value=1000.0)
+    def test_awb_action_preserves_mode_blocks_reentry_and_renders_result(self, clock):
         self.operation()
         self.key("sa")
         self.assertEqual(self.api.calls, [("/api/white-balance/awb", {})])
@@ -190,14 +191,37 @@ class GuiKeyboardTest(unittest.TestCase):
         self.assertNotIn("完了", self.window.white_balance_label.text())
         self.key("aa")
         self.assertEqual(len(self.api.calls), 1)
+        clock.return_value = 1002.0
         for status, message in [("completed", "AWB 完了"), ("failed", "白い領域が不足"),
                                 ("unconfirmed", "結果を確認できません")]:
-            self.api.state["awb"] = {"status": status, "message": message}
+            self.api.state["awb"] = {"status": status, "message": message, "retryAfterMs": 1000}
             self.window.refresh_state()
             self.assertIn(message, self.window.white_balance_label.text())
             self.assertFalse(self.window.awb_running)
+            self.key("a")
+            self.assertEqual(len(self.api.calls), 1, "Result arrival must not shorten the cooldown")
+        clock.return_value = 1003.0
         self.key("a")
         self.assertEqual(len(self.api.calls), 2)
+
+    @patch("fx6_operator.main_window.monotonic", return_value=1000.0)
+    def test_awb_retries_at_three_seconds_without_result_or_poll(self, clock):
+        self.operation()
+        self.key("a")
+        clock.return_value = 1002.999
+        self.key("aa")
+        self.assertEqual(len(self.api.calls), 1)
+        self.assertIn("3秒", self.window.control_feedback.text())
+        self.assertTrue(self.window.awb_running)
+        clock.return_value = 1003.0
+        self.key("a")
+        self.assertEqual(len(self.api.calls), 2)
+        clock.return_value = 1005.999
+        self.key("a")
+        self.assertEqual(len(self.api.calls), 2)
+        clock.return_value = 1006.0
+        self.key("a")
+        self.assertEqual(len(self.api.calls), 3)
 
     def test_awb_needs_no_exposure_mode_and_no_auto_repeat(self):
         self.operation()

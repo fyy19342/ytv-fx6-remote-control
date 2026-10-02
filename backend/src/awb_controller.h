@@ -75,15 +75,27 @@ private:
 
 // Protected by the service's dedicated AWB mutex; no SDK mutex in callbacks.
 struct AwbProgress {
+    static constexpr int64_t retry_interval_ms = 3000;
     std::string status = "idle";
     std::string message;
     int64_t deadline_ms = 0;
+    int64_t retry_at_ms = 0;
+    bool result_ambiguous = false;
+
+    int64_t retry_after_ms(int64_t now_ms) const {
+        return std::max<int64_t>(0, retry_at_ms - now_ms);
+    }
 
     bool begin(int64_t now_ms) {
         expire(now_ms);
-        if (status == "running") return false;
-        status = "running";
-        message = "AWB の結果確認中。カメラ本体の結果も確認してください。";
+        if (retry_after_ms(now_ms) > 0) return false;
+        // SDK callbacks have no request ID. After retrying an unresolved request,
+        // a late result cannot safely be attributed until the next connection.
+        result_ambiguous = result_ambiguous || status == "running" || status == "unconfirmed";
+        status = result_ambiguous ? "unconfirmed" : "running";
+        message = result_ambiguous ? "AWB を再実行しました。結果はカメラ本体で確認してください。" :
+                                    "AWB の結果確認中。カメラ本体の結果も確認してください。";
+        retry_at_ms = now_ms + retry_interval_ms;
         deadline_ms = now_ms + 15000;
         return true;
     }

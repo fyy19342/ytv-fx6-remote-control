@@ -1,4 +1,4 @@
-# Current pipeline — 20261002c
+# Current pipeline — 20261002d
 
 1. build_info.json から build ID / version / port を取得。
 2. CMake で backend を構築し、ND と露出操作の CTest を実行。

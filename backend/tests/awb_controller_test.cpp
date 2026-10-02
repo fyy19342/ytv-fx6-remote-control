@@ -54,20 +54,45 @@ int main() {
     progress.notify(true, "old notification");
     assert(progress.status == "idle");
     assert(progress.begin(0) && !progress.begin(100));
+    assert(progress.retry_after_ms(0) == 3000);
+    assert(progress.retry_after_ms(2999) == 1);
     progress.notify(false, "white area too small");
     assert(progress.status == "failed");
-    assert(progress.begin(200));
+    assert(!progress.begin(2999)); // Failure does not release the cooldown early.
+    assert(progress.begin(3000));
     progress.notify(true, "SDK confirmed AWB");
     assert(progress.status == "completed");
-    assert(progress.begin(300));
-    progress.expire(15299);
+    assert(!progress.begin(5999)); // Nor does an early completion.
+    assert(progress.begin(6000));
+    progress.expire(9000);
+    assert(progress.status == "running" && progress.retry_after_ms(9000) == 0);
+    progress.expire(20999);
     assert(progress.status == "running");
-    progress.expire(15300);
+    progress.expire(21000);
     assert(progress.status == "unconfirmed");
     progress.notify(true, "late notification");
     assert(progress.status == "unconfirmed");
-    assert(progress.begin(16000));
-    progress.disconnect();
+
+    AwbProgress pending;
+    assert(pending.begin(0));
+    assert(!pending.begin(2999));
+    assert(pending.begin(3000)); // No result notification is required to retry.
+    assert(pending.status == "unconfirmed" && pending.result_ambiguous);
+    pending.notify(true, "old request completed after new request started");
+    assert(pending.status == "unconfirmed");
+    assert(!pending.begin(5999) && pending.begin(6000));
+    pending.fail("write failure");
+    assert(!pending.begin(8999) && pending.begin(9000));
+    pending.notify(false, "ambiguous old failure");
+    assert(pending.status == "unconfirmed");
+    assert(progress.begin(22000)); // Also keep late results ambiguous after timeout.
+    progress.notify(true, "old request result");
     assert(progress.status == "unconfirmed");
+
+    AwbProgress disconnected;
+    assert(disconnected.begin(0));
+    disconnected.disconnect();
+    assert(disconnected.status == "unconfirmed");
+    assert(!disconnected.begin(2999) && disconnected.begin(3000));
     std::cout << "awb_controller_test passed\n";
 }

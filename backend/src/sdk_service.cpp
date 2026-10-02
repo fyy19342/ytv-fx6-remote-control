@@ -650,6 +650,7 @@ StateSnapshot Fx6SdkService::get_state() {
         awb_progress_.expire(monotonic_ms());
         if (!connected_) awb_progress_.disconnect();
         snapshot.awb = awb_progress_;
+        snapshot.awb_retry_after_ms = awb_progress_.retry_after_ms(monotonic_ms());
     }
     if (!connected_) return snapshot;
 
@@ -732,7 +733,7 @@ bool Fx6SdkService::run_awb(std::string& error) {
     {
         std::lock_guard<std::mutex> state_lock(awb_mutex_);
         if (!awb_progress_.begin(monotonic_ms())) {
-            error = "AWB is already running. Wait for its result.";
+            error = "AWB は前回の実行から3秒後に再実行できます。";
             return false;
         }
     }

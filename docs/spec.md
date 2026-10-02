@@ -1,4 +1,4 @@
-# 現行仕様 — 20261002c / 0.4.5
+# 現行仕様 — 20261002d / 0.4.6
 
 操作は [KEYBOARD_CONTROLS](KEYBOARD_CONTROLS.md) を正本とします。GUI はログイン、検出、接続・切断、Iris / Gain (ISO) / Shutter Speed / ND / Camera / Backend のカード、選択モード、White Balance の色温度・状態、操作結果、終了ボタンを提供します。
 
@@ -24,4 +24,4 @@ QShortcut は操作ページ配下の WidgetWithChildrenShortcut とし、接続
 
 API の POST は form-urlencoded。成功は `{ok:true,data:...}`、失敗は HTTP 400 と `{ok:false,error:...}`。GUI は本文の具体的なエラーを表示します。既存の `/api/iso/base/{toggle,high,low}` は保守用に残しますが、GUI のキー割当には含めません。ND の前回値復帰と ECS の周波数操作はありません。shutterMode / shutterSpeed を状態に含みます。
 
-状態は whiteBalanceMode、colorTemperature、awbButton、awb を含みます。awb.status は idle / running / completed / failed / unconfirmed。POST 成功は指示受付であり測定完了ではありません。結果通知で completed / failed に遷移し、15秒で通知がなければ unconfirmed。処理中の再実行は拒否します。
+状態は whiteBalanceMode、colorTemperature、awbButton、awb を含みます。awb.status は idle / running / completed / failed / unconfirmed。POST 成功は指示受付であり測定完了ではありません。結果通知で completed / failed に遷移し、15秒で通知がなければ unconfirmed。再実行は前回の実行開始から3秒後に可能です。awb.retryAfterMs は残り待ち時間（ミリ秒）を返し、結果通知の状態と独立しています。3秒未満の要求は backend も拒否します。前の結果が未確認のまま再実行した場合、通知をどの要求に対応させるか確定できないため unconfirmed とし、接続をやり直すまで完了／失敗通知から成功を断定しません。
